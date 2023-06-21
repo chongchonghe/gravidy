@@ -35,6 +35,7 @@
  */
 #undef _GLIBCXX_ATOMIC_BUILTINS
 #include "Hermite4GPU.cuh"
+#include "nvToolsExt.h"
 
 /** Constructor that uses its parent one.
  * Additionally handles the split of the particles of the system among the available
@@ -402,11 +403,17 @@ void Hermite4GPU::update_acc_jrk(int nact)
     //}
 
     // Fill the h_i Predictor array with the particles that we need to move
+    char nacts[128];
+    sprintf(nacts, "nact for loop %d", nact);
+    nvtxRangePushA(nacts);
+    // nvtxRangePushA("nact for loop");
+    
     #pragma omp parallel for
     for (int i = 0; i < nact; i++)
     {
         ns->h_i[i] = ns->h_p[ns->h_move[i]];
     }
+    nvtxRangePop();
 
     for(int g = 0; g < gpus; g++)
     {

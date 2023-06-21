@@ -122,6 +122,7 @@ mpi: CXXFLAGS+=$(MPIFLAGS)
 mpi: gravidy-mpi
 
 gpu: CXXFLAGS+=$(LINKFLAGS)
+gpu: CXXFLAGS+=-lnvToolsExt 
 gpu: gravidy-gpu
 
 gpuf: CXXFLAGS+=$(LINKFLAGS) -DMIXFORCE

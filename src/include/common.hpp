@@ -52,6 +52,7 @@
 #include <vector>
 #include <string>
 
+#include "nvToolsExt.h"
 
 #if defined(_MPI)
 #define MPI_NUM_SLAVES 600

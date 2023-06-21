@@ -80,15 +80,23 @@ void Hermite4GPU::integration()
 
     while (ITIME < ns->integration_time)
     {
+        nvtxRangePushA("one time step");
+
         ITIME = ATIME;
 
+        nvtxRangePushA("find_particles_to_move");
         nact = find_particles_to_move(ITIME);
+        nvtxRangePop();
 
         save_old_acc_jrk(nact);
 
+        nvtxRangePushA("predicted_pos_vel");
         predicted_pos_vel(ITIME);
+        nvtxRangePop();
 
+        nvtxRangePushA("update_acc_jrk");
         update_acc_jrk(nact);
+        nvtxRangePop();
 
         correction_pos_vel(ITIME, nact);
 
@@ -124,6 +132,8 @@ void Hermite4GPU::integration()
 
         // Increase iteration counter
         ns->iterations++;
+
+        nvtxRangePop();
     }
 
     ns->gtime.integration_end =  omp_get_wtime() - ns->gtime.integration_ini;
