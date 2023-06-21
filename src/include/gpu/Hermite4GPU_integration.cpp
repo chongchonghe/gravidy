@@ -119,7 +119,7 @@ void Hermite4GPU::integration()
                 nu->lagrange_radii();
                 logger->print_lagrange_radii(ITIME, nu->layers_radii);
             }
-            if (ITIME != ns->interval_time)
+            if (ITIME < ns->integration_time)
             {
                 logger->write_snapshot(snap_number, ITIME);
                 snap_number++;
