@@ -142,6 +142,7 @@ class Hermite4GPU : public Hermite4 {
         double get_energy_gpu();
 
 };
+// haha
 
 /**
  * Initialization kernel, which consider an \f$N^2\f$ interaction of the particles.
