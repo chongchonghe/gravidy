@@ -94,6 +94,8 @@ void Hermite4GPU::integration()
 
         save_old_acc_jrk(nact);
 
+        // Host2Device
+
         nvtxRangePushA("predicted_pos_vel");
         predicted_pos_vel(ITIME);
         nvtxRangePop();
@@ -101,6 +103,8 @@ void Hermite4GPU::integration()
         nvtxRangePushA("update_acc_jrk");
         update_acc_jrk(nact);
         nvtxRangePop();
+
+        // Device2Host
 
         correction_pos_vel(ITIME, nact);
 

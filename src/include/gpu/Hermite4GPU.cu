@@ -639,3 +639,33 @@ float Hermite4GPU::gpu_timer_stop(std::string f){
  * to perfom the force calculation, not a host method.
  */
 void Hermite4GPU::force_calculation(const Predictor &pi, const Predictor &pj, Forces &fi) {}
+
+
+/** Method in charge of finding all the particles that need to be
+ * updated on the following integration step.
+ * Since we are using DP, we base the comparison between times and
+ * timesteps using the machine epsilon, to avoid overflows.
+ *
+ */
+unsigned int Hermite4GPU::find_particles_to_move(double ITIME)
+{
+
+    unsigned int j = 0;
+    for (unsigned int i = 0; i < ns->n; i++)
+    {
+        ns->h_move[i] = -1;
+
+        // Getting larger mass of the system
+        if (ns->h_r[i].w > ns->max_mass)
+            ns->max_mass = ns->h_r[i].w;
+
+        double tmp_time = ns->h_t[i] + ns->h_dt[i];
+        if(std::fabs(ITIME - tmp_time) <
+            2*std::numeric_limits<double>::epsilon())
+        {
+            ns->h_move[j] = i;
+            j++;
+        }
+    }
+    return j;
+}
