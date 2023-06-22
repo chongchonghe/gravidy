@@ -2,6 +2,9 @@
 
 Check the original README in the master branch, or the original repo (https://github.com/cmaureir/gravidy).
 
+## This branch, NACT_LO_LIMIT
+We set a limit on the `nact` variable, which tells the program how  many particles should be updated this iteration. If it is lower than this, we make the CPU do the computation and if it is higher, the GPU does it. We find that the CPU is categorically slower, even for very small `nact` and so no `NACT_LO_LIMIT` is reasonable. All the work must be done on the GPU.
+
 ## About
 
 **GraviDy** is a new GPU, direct-summation N-body integrator written from scratch and based on the
@@ -28,7 +31,7 @@ git clone https://github.com/chongchonghe/gravidy
 cd gravidy/src
 ```
 
-Then, depending on the OS you are on, 
+Then, depending on the OS you are on,
 
 - On UMD Astronomy machines, the default g++ is version 8, which is outdated. Version 11 is available in PATH as g++11
 
@@ -38,7 +41,7 @@ make CXX="g++11"
 
 The original version of Gravidy use Boost library to do command parsing. I rewrote that part using pure C++ and removed this dependency, so the code does not rely on any library. If you want to use the original version with Boost, pass `use_boost=1` as an argument to make.
 
-- On macOS, use your latest version of g++ isntalled via homebrew. The default g++, or Apple clang, does not support omp. The Boost library failed on macOS, so Makefile automatically set use_boost to 0 on Mac. 
+- On macOS, use your latest version of g++ isntalled via homebrew. The default g++, or Apple clang, does not support omp. The Boost library failed on macOS, so Makefile automatically set use_boost to 0 on Mac.
 
 ```sh
 make CXX="g++-13"
@@ -105,7 +108,7 @@ bash test2.bash
 
 You can render UML diagrams using [Mermaid](https://mermaidjs.github.io/). For example, this will produce a sequence diagram:
 
-Here is a flow chart for 32k particles: 
+Here is a flow chart for 32k particles:
 
 TODO:
 
