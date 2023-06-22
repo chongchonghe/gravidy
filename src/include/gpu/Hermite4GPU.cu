@@ -383,7 +383,7 @@ void Hermite4GPU::init_acc_jrk()
  *  The second kernel, reduction, is in charge of summing all the preliminary forces
  *  to the final value for all the active particles.
  */
-void Hermite4GPU::update_acc_jrk(int nact)
+void Hermite4GPU::update_acc_jrk(unsigned int nact)
 {
     // Timer begin
     ns->gtime.update_ini = omp_get_wtime();
@@ -407,7 +407,7 @@ void Hermite4GPU::update_acc_jrk(int nact)
     sprintf(nacts, "nact for loop %d", nact);
     nvtxRangePushA(nacts);
     // nvtxRangePushA("nact for loop");
-    
+
     #pragma omp parallel for
     for (int i = 0; i < nact; i++)
     {
@@ -635,10 +635,35 @@ float Hermite4GPU::gpu_timer_stop(std::string f){
     return msec;
 }
 
-/** This method is not implemented becasue we use a CUDA kernel
- * to perfom the force calculation, not a host method.
+/** Copied from the CPU version, since we will use it in the cpu update_acc_jrk_cpu function
  */
-void Hermite4GPU::force_calculation(const Predictor &pi, const Predictor &pj, Forces &fi) {}
+void Hermite4GPU::force_calculation(const Predictor &pi, const Predictor &pj, Forces &fi) {
+  double rx = pj.r[0] - pi.r[0];
+  double ry = pj.r[1] - pi.r[1];
+  double rz = pj.r[2] - pi.r[2];
+
+  double vx = pj.v[0] - pi.v[0];
+  double vy = pj.v[1] - pi.v[1];
+  double vz = pj.v[2] - pi.v[2];
+
+  double r2     = rx*rx + ry*ry + rz*rz + ns->e2;
+  double rinv   = 1.0/sqrt(r2);
+  double r2inv  = rinv  * rinv;
+  double r3inv  = r2inv * rinv;
+  double r5inv  = r2inv * r3inv;
+  double mr3inv = r3inv * pj.m;
+  double mr5inv = r5inv * pj.m;
+
+  double rv = rx*vx + ry*vy + rz*vz;
+
+  fi.a[0] += (rx * mr3inv);
+  fi.a[1] += (ry * mr3inv);
+  fi.a[2] += (rz * mr3inv);
+
+  fi.a1[0] += (vx * mr3inv - (3 * rv ) * rx * mr5inv);
+  fi.a1[1] += (vy * mr3inv - (3 * rv ) * ry * mr5inv);
+  fi.a1[2] += (vz * mr3inv - (3 * rv ) * rz * mr5inv);
+}
 
 
 /**
@@ -673,4 +698,37 @@ void Hermite4GPU::predicted_pos_vel_cpu(double ITIME)
 
     }
     ns->gtime.prediction_end += omp_get_wtime() - ns->gtime.prediction_ini;
+}
+
+/** Method that call the force_calculation method for every \f$i-\f$ and \f$j\f$
+ * particles interaction of the \f$N_{act}\f$ ones.
+ CPU version
+ */
+ void Hermite4GPU::update_acc_jrk_cpu(unsigned int nact)
+{
+    ns->gtime.update_ini = omp_get_wtime();
+    unsigned int i = 0;
+    unsigned int j = 0;
+    #pragma omp parallel for private(i,j)
+    for (unsigned int k = 0; k < nact; k++)
+    {
+        i = ns->h_move[k];
+        ns->h_f[i].a[0]  = 0.0;
+        ns->h_f[i].a[1]  = 0.0;
+        ns->h_f[i].a[2]  = 0.0;
+        ns->h_f[i].a1[0] = 0.0;
+        ns->h_f[i].a1[1] = 0.0;
+        ns->h_f[i].a1[2] = 0.0;
+
+        #pragma omp parallel for
+        for (j = 0; j < ns->n; j++)
+        {
+            if(i == j) continue;
+            force_calculation(ns->h_p[i], ns->h_p[j], ns->h_f[i]);
+            #ifdef PN
+            force_calculation_pn(ns->h_p[i], ns->h_p[j], ns->h_f[i], ns->h_f[j], i);
+            #endif
+        }
+    }
+    ns->gtime.update_end += omp_get_wtime() - ns->gtime.update_ini;
 }

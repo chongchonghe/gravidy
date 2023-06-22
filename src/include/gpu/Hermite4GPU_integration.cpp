@@ -34,6 +34,7 @@
  *
  */
 #include "Hermite4GPU.cuh"
+#include "nvToolsExt.h"
 
 void Hermite4GPU::integration()
 {
@@ -94,24 +95,26 @@ void Hermite4GPU::integration()
 
         save_old_acc_jrk(nact);
 
-        // nvtxRangePushA("predicted_pos_vel");
-        // predicted_pos_vel(ITIME);
-        // nvtxRangePop();
-
-        // char str_nvtx[128];
-        // sprintf(str_nvtx, "update_%s_%d", nact>NACT_LO_LIMIT ? "gpu" : "cpu", nact);
-        // nvtxRangePushA(str_nvtx);
+        char str_nvtx[128];
+        sprintf(str_nvtx, "pred-update_%s_%d", nact>NACT_LO_LIMIT ? "gpu" : "cpu", nact);
+        nvtxRangePushA(str_nvtx);
         if (nact > NACT_LO_LIMIT) {
           // GPU; number of particles in this iteration is large enough, let GPU do it
+          nvtxRangePushA("predicted_pos_vel GPU");
           predicted_pos_vel(ITIME);
+          nvtxRangePop();
+          nvtxRangePushA("update_acc_jrk GPU");
+          update_acc_jrk(nact);
+          nvtxRangePop();
         } else {
           // CPU; number of particles in this iteration too small, have CPU do it
+          nvtxRangePushA("predicted_pos_vel CPU");
           predicted_pos_vel_cpu(ITIME);
+          nvtxRangePop();
+          nvtxRangePushA("update_acc_jrk CPU");
+          update_acc_jrk_cpu(nact);
+          nvtxRangePop();
         }
-        // nvtxRangePop();
-
-        nvtxRangePushA("update_acc_jrk");
-        update_acc_jrk(nact);
         nvtxRangePop();
 
         correction_pos_vel(ITIME, nact);
