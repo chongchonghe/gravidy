@@ -132,6 +132,7 @@ class Hermite4GPU : public Hermite4 {
         void init_acc_jrk();
         void update_acc_jrk(int nact);
         void predicted_pos_vel(double ITIME);
+        void predicted_pos_vel_cpu(double ITIME);
         void correction_pos_vel(double ITIME, int nact);
         void integration();
 
@@ -142,7 +143,6 @@ class Hermite4GPU : public Hermite4 {
         double get_energy_gpu();
 
 };
-// haha
 
 /**
  * Initialization kernel, which consider an \f$N^2\f$ interaction of the particles.

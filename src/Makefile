@@ -111,7 +111,7 @@ OBJS_GPU += include/gpu/Hermite4GPU.cuo
 # Main rules
 .PHONY: cpu pn mpi gpu doxy clean distclean cpus cpum mpis mpim gpus gpum
 
-all: cpu
+all: gpu
 
 pn: print_pn
 pn: gravidy-cpu
