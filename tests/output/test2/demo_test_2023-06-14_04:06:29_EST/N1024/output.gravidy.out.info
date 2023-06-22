@@ -1,8 +1,0 @@
-# NumberParticles:                    1024
-# Softening:                        0.0001
-# EtaTimestep:                        0.01
-# IntegrationTime:                       5
-# PrintScreen:                           0
-# InputFilename:      ../input/04-nbody-p1024_m1.in
-# OutputFilename:     output/test2/test_2023-06-14_04:06:29_EST/N1024/output.gravidy.out
-# SnapshotNumber:                       41

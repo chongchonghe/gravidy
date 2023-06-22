@@ -80,7 +80,11 @@ void Hermite4GPU::integration()
 
     while (ITIME < ns->integration_time)
     {
-        nvtxRangePushA("one time step");
+        // Pushing the epoch (iteration) number to profiler
+        // the, convert string to char* to use it in nvtxRangePushA
+        std::string epoch = "Epoch " + std::to_string(ns->iterations);
+        char const *epoch_char = epoch.c_str();
+        nvtxRangePushA(epoch_char);
 
         ITIME = ATIME;
 
