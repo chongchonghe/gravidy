@@ -50,7 +50,7 @@ void Hermite4GPU::integration()
     // NACT LOWER LIMIT; set a lower limit on the number of particles involved in a time step
     // if it's too low, let the CPU do it, don't waste GPU overhead on 10 particles for example.
     // rkarim
-    const unsigned int NACT_LO_LIMIT = 1024;
+    const unsigned int NACT_LO_LIMIT = 128;
 
     // Setting maximum number of threads for OpenMP sections
     omp_set_num_threads(omp_get_max_threads());
@@ -103,17 +103,21 @@ void Hermite4GPU::integration()
           nvtxRangePushA("predicted_pos_vel GPU");
           predicted_pos_vel(ITIME);
           nvtxRangePop();
+
           nvtxRangePushA("update_acc_jrk GPU");
           update_acc_jrk(nact);
           nvtxRangePop();
+
         } else {
           // CPU; number of particles in this iteration too small, have CPU do it
           nvtxRangePushA("predicted_pos_vel CPU");
           predicted_pos_vel_cpu(ITIME);
           nvtxRangePop();
+
           nvtxRangePushA("update_acc_jrk CPU");
           update_acc_jrk_cpu(nact);
           nvtxRangePop();
+
         }
         nvtxRangePop();
 
