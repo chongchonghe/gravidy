@@ -424,18 +424,17 @@ void Hermite4GPU::update_acc_jrk(unsigned int nact)
     //}
 
     // Fill the h_i Predictor array with the particles that we need to move
+    // // nvtxRangePushA("nact for loop");
+    //
+    // #pragma omp parallel for
+    // for (int i = 0; i < nact; i++)
+    // {
+    //     ns->h_i[i] = ns->h_p[ns->h_move[i]];
+    // }
+
     char nacts[128];
     sprintf(nacts, "nact for loop %d", nact);
     nvtxRangePushA(nacts);
-    // nvtxRangePushA("nact for loop");
-
-    #pragma omp parallel for
-    for (int i = 0; i < nact; i++)
-    {
-        ns->h_i[i] = ns->h_p[ns->h_move[i]];
-    }
-    nvtxRangePop();
-
     for(int g = 0; g < gpus; g++)
     {
         if (n_part[g] > 0)
@@ -443,10 +442,11 @@ void Hermite4GPU::update_acc_jrk(unsigned int nact)
             CSC(cudaSetDevice(g));
             // Copy to the GPU (d_i) the preddictor host array (h_i)
             size_t chunk = nact * sizeof(Predictor);
-            //CSC(cudaMemcpy(ns->d_i[g], ns->h_i, chunk, cudaMemcpyHostToDevice));
-            CSC(cudaMemcpyAsync(ns->d_i[g], ns->h_i, chunk, cudaMemcpyHostToDevice, 0));
+            // CSC(cudaMemcpyAsync(ns->d_i[g], ns->h_i, chunk, cudaMemcpyHostToDevice, 0));
+            CSC(cudaMemcpyAsync(ns->d_move[g], ns->h_move, chunk, cudaMemcpyHostToDevice, 0));
         }
     }
+    nvtxRangePop();
 
     ns->gtime.grav_ini = omp_get_wtime();
     for(int g = 0; g < gpus; g++)
@@ -527,6 +527,11 @@ void Hermite4GPU::update_acc_jrk(unsigned int nact)
     ns->gtime.reduce_forces_ini = omp_get_wtime();
 
     int g = 0; // g can only be 0 here. Only use 1 GPU for this.
+    if (gpus > 1) {
+      char gpu_msg[128];
+      sprintf(gpu_msg, "GPUS (%d) GTR THAN 1!!!!!", gpus);
+      logger->log(1, gpu_msg);
+    }
     CSC(cudaSetDevice(g));
 
     nthreads = BSIZE;
@@ -572,6 +577,8 @@ void Hermite4GPU::update_acc_jrk(unsigned int nact)
             size_t ff_size = n_part[g] * sizeof(Forces);
 
             // Copy from the GPU all forces, which have been updated
+            // old copy:
+            //CSC(cudaMemcpy(ns->h_fout_gpu[g], ns->d_fout_tmp[g], chunk, cudaMemcpyDeviceToHost));
             CSC(cudaMemcpyAsync(&ns->h_f[slice], ns->d_f[g], ff_size, cudaMemcpyDeviceToHost, 0));
         }
     }
