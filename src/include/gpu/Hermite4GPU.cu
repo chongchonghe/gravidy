@@ -523,19 +523,6 @@ void Hermite4GPU::update_acc_jrk(unsigned int nact)
     }
     ns->gtime.reduce_end += omp_get_wtime() - ns->gtime.reduce_ini;
 
-    for(int g = 0; g < gpus; g++)
-    {
-        if (n_part[g] > 0)
-        {
-            CSC(cudaSetDevice(g));
-            size_t chunk = nact*sizeof(Forces);
-
-            // Copy from the GPU the new forces for the d_i particles.
-            //CSC(cudaMemcpy(ns->h_fout_gpu[g], ns->d_fout_tmp[g], chunk, cudaMemcpyDeviceToHost));
-            CSC(cudaMemcpyAsync(ns->h_fout_gpu[g], ns->d_fout_tmp[g], chunk, cudaMemcpyDeviceToHost, 0));
-        }
-    }
-
     // Update forces in the host
     ns->gtime.reduce_forces_ini = omp_get_wtime();
 
@@ -574,6 +561,22 @@ void Hermite4GPU::update_acc_jrk(unsigned int nact)
     //         }
     //     }
     // }
+
+    for(int g = 0; g < gpus; g++)
+    {
+        if (n_part[g] > 0)
+        {
+            CSC(cudaSetDevice(g));
+
+            size_t slice = g*n_part[g-1];
+            size_t ff_size = n_part[g] * sizeof(Forces);
+
+            // Copy from the GPU all forces, which have been updated
+            CSC(cudaMemcpyAsync(&ns->h_f[slice], ns->d_f[g], ff_size, cudaMemcpyDeviceToHost, 0));
+        }
+    }
+
+
     ns->gtime.reduce_forces_end += omp_get_wtime() - ns->gtime.reduce_forces_ini;
 
     // Timer end
