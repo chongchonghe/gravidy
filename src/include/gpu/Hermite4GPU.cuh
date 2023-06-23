@@ -229,13 +229,13 @@ __global__ void k_correction(int *move,
                             double ETA);
 
 /** Vector magnitude calculation; copied from the one in NbodyUtils **/
-__device__ k_get_magnitude(const double &x, const double &y, const double &z);
+__device__ double k_get_magnitude(const double &x, const double &y, const double &z);
 
 
 /** Time step calculation; copied from the one in NbodyUtils.
 Used to take an unsigned int i argument but I got rid if it.
 **/
-__device__ k_get_timestep_normal(const float &ETA,
+__device__ double k_get_timestep_normal(const float &ETA,
                                  const double3 &a2,
                                  const double3 &a3,
                                  const double &dt,
@@ -247,7 +247,7 @@ __device__ k_get_timestep_normal(const float &ETA,
 Copied from the version in NbodyUtils; that version takes an argument "unsigned int i"
 but does not use it, so I dropped that argument.
 **/
-__device__ k_normalize_dt(double &new_dt,
+__device__ double k_normalize_dt(double &new_dt,
                          const double &old_dt,
                          const double &t);
 

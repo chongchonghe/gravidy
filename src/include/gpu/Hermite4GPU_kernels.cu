@@ -348,9 +348,9 @@ __global__ void k_correction(int *move,
       r[i].z = pp.r[2] + (dt4_24)*a2[i].z + (dt5_120)*a3[i].z;
 
       // Correcting velocity
-      v[i].x = pp.v[0] + (dt3_6)*a2.[i]x +   (dt4_24)*a3[i].x;
-      v[i].y = pp.v[1] + (dt3_6)*a2.[i]y +   (dt4_24)*a3[i].y;
-      v[i].z = pp.v[2] + (dt3_6)*a2.[i]z +   (dt4_24)*a3[i].z;
+      v[i].x = pp.v[0] + (dt3_6)*a2[i].x +   (dt4_24)*a3[i].x;
+      v[i].y = pp.v[1] + (dt3_6)*a2[i].y +   (dt4_24)*a3[i].y;
+      v[i].z = pp.v[2] + (dt3_6)*a2[i].z +   (dt4_24)*a3[i].z;
 
       t[i] = ITIME;
       double normal_dt = k_get_timestep_normal(ETA, a2[i], a3[i], dt[i], ff);
@@ -361,7 +361,7 @@ __global__ void k_correction(int *move,
 }
 
 /** Vector magnitude calculation; copied from the one in NbodyUtils **/
-__device__ k_get_magnitude(const double &x, const double &y, const double &z)
+__device__ double k_get_magnitude(const double &x, const double &y, const double &z)
 {
   return sqrt(x*x + y*y + z*z);
 }
@@ -369,7 +369,7 @@ __device__ k_get_magnitude(const double &x, const double &y, const double &z)
 /** Time step calculation; copied from the one in NbodyUtils.
 Used to take an unsigned int i argument but I got rid if it.
 **/
-__device__ k_get_timestep_normal(const float &ETA,
+__device__ double k_get_timestep_normal(const float &ETA,
                                  const double3 &a2,
                                  const double3 &a3,
                                  const double &dt,
@@ -415,7 +415,7 @@ __device__ k_get_timestep_normal(const float &ETA,
  to keep that data safe past this function.
  old_dt and t are still pass by reference and constant.
  */
-__device__ k_normalize_dt(double &new_dt,
+__device__ double k_normalize_dt(double &new_dt,
                           const double &old_dt,
                           const double &t)
 {
