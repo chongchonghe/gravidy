@@ -130,9 +130,9 @@ class Hermite4GPU : public Hermite4 {
 
         void force_calculation(const Predictor &pi, const Predictor &pj, Forces &fi);
         void init_acc_jrk();
-        void update_acc_jrk(int nact);
+        void update_acc_jrk(unsigned int nact);
         void predicted_pos_vel(double ITIME);
-        void correction_pos_vel(double ITIME, int nact);
+        void correction_pos_vel(double ITIME, unsigned int nact);
         void integration();
 
         void get_kernel_error();

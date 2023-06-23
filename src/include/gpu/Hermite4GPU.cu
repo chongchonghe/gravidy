@@ -391,7 +391,7 @@ void Hermite4GPU::init_acc_jrk()
  *  The second kernel, reduction, is in charge of summing all the preliminary forces
  *  to the final value for all the active particles.
  */
-void Hermite4GPU::update_acc_jrk(int nact)
+void Hermite4GPU::update_acc_jrk(unsigned int nact)
 {
     // Timer begin
     ns->gtime.update_ini = omp_get_wtime();
