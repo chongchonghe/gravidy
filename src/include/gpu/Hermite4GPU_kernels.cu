@@ -162,8 +162,9 @@ __global__ void k_prediction(Forces *f,
  *
  * @brief Gravitational interaction kernel.
  */
-__global__ void k_update(Predictor *i_p,
-                         Predictor *j_p,
+__global__ void k_update(unsigned int *move,
+                         Predictor *i_p, // this is now the ENTIRE predictor array, not subset
+                         Predictor *j_p, // remains the entire predictor array
                          Forces *fout,
                          int n,
                          int total,
@@ -176,7 +177,8 @@ __global__ void k_update(Predictor *i_p,
     int jstart = (n * (jbid  )) / NJBLOCK;
     int jend   = (n * (jbid+1)) / NJBLOCK;
 
-    Predictor ip = i_p[iaddr];
+    unsigned int particle_idx = move[iaddr];
+    Predictor ip = i_p[particle_idx];
     Forces fo;
     fo.a[0] = 0.0;
     fo.a[1] = 0.0;
@@ -215,6 +217,7 @@ __global__ void k_update(Predictor *i_p,
                 }
             }
         }
+        // Even though we're using the move array in GPU now, leave the fout array as it was
         fout[iaddr*NJBLOCK + jbid] = fo;
 }
 
@@ -288,6 +291,27 @@ __global__ void k_energy(double4 *r,
 }
 
 
+/**
+Move the output of the force updating (a short, subset array) into the full force array.
+Keep this operation on GPU so that we don't move the force array back to GPU.
+**/
+__global__ void k_assign_forces(unsigned int *move, // indices for subset, len dev_size
+                                Forces *fin, // in array (subset of particles, indexed using move)
+                                Forces *f, // out array (entire set of particles)
+                                unsigned int dev_size, // number of particles to update (len of move)
+                                )
+{
+  // thread index; also index of move and fin
+  int thread_idx = threadIdx.x + blockDim.x * blockIdx.x;
+
+  if (thread_idx < dev_size)
+  {
+      // i is the particle to move (gets taken from (ns->h_)move)
+      // i is an index into f
+      int i = move[thread_idx];
+      f[i] = fin[thread_idx];
+  }
+}
 
 
 

@@ -185,7 +185,8 @@ __device__ void k_force_calculation(const Predictor &i_p,
  * particles will be distributed among the GPUs.
  * This kernel calls the k_prediction kernel.
  */
-__global__ void k_update(Predictor *i_p,
+__global__ void k_update(unsigned int *move,
+                         Predictor *i_p,
                          Predictor *j_p,
                          Forces *fout,
                          int n,
@@ -213,6 +214,14 @@ __global__ void k_energy(double4 *r,
                          int dev_size,
                          int dev);
 
+/**
+Move the output of the force updating (a short, subset array) into the full force array.
+Keep this operation on GPU so that we don't move the force array back to GPU.
+**/
+__global__ void k_assign_forces(unsigned int *move,
+                               Forces *fin,
+                               Forces *f,
+                               unsigned int dev_size,)
 
 
 __global__ void k_correction(unsigned int *move,

@@ -460,7 +460,8 @@ void Hermite4GPU::update_acc_jrk(unsigned int nact)
             dim3 nthreads(BSIZE, 1, 1);
 
             // Kernel to update the forces for the particles in d_i
-            k_update <<< nblocks, nthreads, smem >>> (ns->d_i[g],
+            k_update <<< nblocks, nthreads, smem >>> (ns->d_move[g],
+                                                      ns->d_i[g],
                                                       ns->d_p[g], // partial
                                                       ns->d_fout[g],
                                                       n_part[g], // former N
@@ -537,25 +538,42 @@ void Hermite4GPU::update_acc_jrk(unsigned int nact)
 
     // Update forces in the host
     ns->gtime.reduce_forces_ini = omp_get_wtime();
-    #pragma omp parallel for
-    for (int i = 0; i < nact; i++)
-    {
-        int id = ns->h_move[i];
-        ns->h_f[id].a[0] = 0.0;
-        ns->h_f[id].a[1] = 0.0;
-        ns->h_f[id].a[2] = 0.0;
-        ns->h_f[id].a1[0] = 0.0;
-        ns->h_f[id].a1[1] = 0.0;
-        ns->h_f[id].a1[2] = 0.0;
 
-        for(int g = 0; g < gpus; g++)
-        {
-            if (n_part[g] > 0)
-            {
-                ns->h_f[id] += ns->h_fout_gpu[g][i];
-            }
-        }
-    }
+    int g = 0; // g can only be 0 here. Only use 1 GPU for this.
+    CSC(cudaSetDevice(g));
+
+    nthreads = BSIZE;
+    nblocks = std::ceil(nact/(float)nthreads);
+
+    k_assign_forces <<< nblocks, nthreads >>> (ns->d_move[g],
+                                               ns->d_fout_tmp[g],
+                                               ns->d_f[g],
+                                               nact);
+    get_kernel_error();
+
+
+    ///// CPU reduce forces across GPUs. Updates big F array with small subset F array
+    ///// The zero initialization is because it assumes multiple GPUs and so must add.
+    //// We will assume 1 GPU for now.
+    // #pragma omp parallel for
+    // for (int i = 0; i < nact; i++)
+    // {
+    //     int id = ns->h_move[i];
+    //     ns->h_f[id].a[0] = 0.0;
+    //     ns->h_f[id].a[1] = 0.0;
+    //     ns->h_f[id].a[2] = 0.0;
+    //     ns->h_f[id].a1[0] = 0.0;
+    //     ns->h_f[id].a1[1] = 0.0;
+    //     ns->h_f[id].a1[2] = 0.0;
+    //
+    //     for(int g = 0; g < gpus; g++)
+    //     {
+    //         if (n_part[g] > 0)
+    //         {
+    //             ns->h_f[id] += ns->h_fout_gpu[g][i];
+    //         }
+    //     }
+    // }
     ns->gtime.reduce_forces_end += omp_get_wtime() - ns->gtime.reduce_forces_ini;
 
     // Timer end
