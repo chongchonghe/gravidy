@@ -303,8 +303,8 @@ void Hermite4GPU::correction_pos_vel(double ITIME, unsigned int nact)
         double dt5_120 = 0.008333333333333*dt5;
 
         // Keeping these local; do they need to be initialized?
-        double3 a2;
-        double3 a3;
+        double3 a2 = {0};
+        double3 a3 = {0};
 
         // Acceleration 2nd derivate
         a2.x = (-6 * (oo.a[0] - ff.a[0] ) - dt1 * (4 * oo.a1[0] + 2 * ff.a1[0]) ) * dt2inv;
