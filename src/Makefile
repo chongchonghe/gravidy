@@ -122,8 +122,10 @@ mpi: CXXFLAGS+=$(MPIFLAGS)
 mpi: gravidy-mpi
 
 gpu: CXXFLAGS+=$(LINKFLAGS)
-gpu: CXXFLAGS+=-lnvToolsExt 
+gpu: CXXFLAGS+=-lnvToolsExt
 gpu: gravidy-gpu
+
+gpurun: gpu maketest
 
 gpuf: CXXFLAGS+=$(LINKFLAGS) -DMIXFORCE
 gpuf: gravidy-gpu
@@ -143,6 +145,8 @@ mpis: gravidy-mpi
 print_pn:
 	@echo "PN implementation is enabled in CPU version"
 
+maketest:
+	./make_and_run_test.sh
 
 # Rules to generate CUDA object
 %.cuo : %.cu
@@ -172,7 +176,7 @@ clean:
 	rm -f gravidy-cpu
 	rm -f gravidy-mpi
 
-distclean: 
+distclean:
 	rm -f include/*.o
 	rm -f include/cpu/*.o
 	rm -f include/utils/*.o

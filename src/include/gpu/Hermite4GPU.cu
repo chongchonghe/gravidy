@@ -272,12 +272,16 @@ void Hermite4GPU::predicted_pos_vel(double ITIME)
  * This is not implemented on the GPU because the benefit was not much
  * for small amount of particles.
  */
-void Hermite4GPU::correction_pos_vel(double ITIME, int nact)
+void Hermite4GPU::correction_pos_vel(double ITIME, unsigned int nact)
 {
+    // Timer
     ns->gtime.correction_ini = omp_get_wtime();
-    int i;
+
+    // i is the particle to move (gets taken from ns->h_move)
+    /** in the more-gpu less-copy rewrite, we want this to just use d_ arrays. **/
+    unsigned int i;
     #pragma omp parallel for private(i)
-    for (int k = 0; k < nact; k++)
+    for (unsigned int k = 0; k < nact; k++)
     {
         i = ns->h_move[k];
 
@@ -298,26 +302,30 @@ void Hermite4GPU::correction_pos_vel(double ITIME, int nact)
         double dt4_24 = 0.041666666666666*dt4;
         double dt5_120 = 0.008333333333333*dt5;
 
+        // Keeping these local; do they need to be initialized?
+        double3 a2;
+        double3 a3;
+
         // Acceleration 2nd derivate
-        ns->h_a2[i].x = (-6 * (oo.a[0] - ff.a[0] ) - dt1 * (4 * oo.a1[0] + 2 * ff.a1[0]) ) * dt2inv;
-        ns->h_a2[i].y = (-6 * (oo.a[1] - ff.a[1] ) - dt1 * (4 * oo.a1[1] + 2 * ff.a1[1]) ) * dt2inv;
-        ns->h_a2[i].z = (-6 * (oo.a[2] - ff.a[2] ) - dt1 * (4 * oo.a1[2] + 2 * ff.a1[2]) ) * dt2inv;
+        a2.x = (-6 * (oo.a[0] - ff.a[0] ) - dt1 * (4 * oo.a1[0] + 2 * ff.a1[0]) ) * dt2inv;
+        a2.y = (-6 * (oo.a[1] - ff.a[1] ) - dt1 * (4 * oo.a1[1] + 2 * ff.a1[1]) ) * dt2inv;
+        a2.z = (-6 * (oo.a[2] - ff.a[2] ) - dt1 * (4 * oo.a1[2] + 2 * ff.a1[2]) ) * dt2inv;
 
         // Acceleration 3rd derivate
-        ns->h_a3[i].x = (12 * (oo.a[0] - ff.a[0] ) + 6 * dt1 * (oo.a1[0] + ff.a1[0]) ) * dt3inv;
-        ns->h_a3[i].y = (12 * (oo.a[1] - ff.a[1] ) + 6 * dt1 * (oo.a1[1] + ff.a1[1]) ) * dt3inv;
-        ns->h_a3[i].z = (12 * (oo.a[2] - ff.a[2] ) + 6 * dt1 * (oo.a1[2] + ff.a1[2]) ) * dt3inv;
+        a3.x = (12 * (oo.a[0] - ff.a[0] ) + 6 * dt1 * (oo.a1[0] + ff.a1[0]) ) * dt3inv;
+        a3.y = (12 * (oo.a[1] - ff.a[1] ) + 6 * dt1 * (oo.a1[1] + ff.a1[1]) ) * dt3inv;
+        a3.z = (12 * (oo.a[2] - ff.a[2] ) + 6 * dt1 * (oo.a1[2] + ff.a1[2]) ) * dt3inv;
 
 
         // Correcting position
-        ns->h_r[i].x = pp.r[0] + (dt4_24)*ns->h_a2[i].x + (dt5_120)*ns->h_a3[i].x;
-        ns->h_r[i].y = pp.r[1] + (dt4_24)*ns->h_a2[i].y + (dt5_120)*ns->h_a3[i].y;
-        ns->h_r[i].z = pp.r[2] + (dt4_24)*ns->h_a2[i].z + (dt5_120)*ns->h_a3[i].z;
+        ns->h_r[i].x = pp.r[0] + (dt4_24)*a2.x + (dt5_120)*a3.x;
+        ns->h_r[i].y = pp.r[1] + (dt4_24)*a2.y + (dt5_120)*a3.y;
+        ns->h_r[i].z = pp.r[2] + (dt4_24)*a2.z + (dt5_120)*a3.z;
 
         // Correcting velocity
-        ns->h_v[i].x = pp.v[0] + (dt3_6)*ns->h_a2[i].x + (dt4_24)*ns->h_a3[i].x;
-        ns->h_v[i].y = pp.v[1] + (dt3_6)*ns->h_a2[i].y + (dt4_24)*ns->h_a3[i].y;
-        ns->h_v[i].z = pp.v[2] + (dt3_6)*ns->h_a2[i].z + (dt4_24)*ns->h_a3[i].z;
+        ns->h_v[i].x = pp.v[0] + (dt3_6)*a2.x + (dt4_24)*a3.x;
+        ns->h_v[i].y = pp.v[1] + (dt3_6)*a2.y + (dt4_24)*a3.y;
+        ns->h_v[i].z = pp.v[2] + (dt3_6)*a2.z + (dt4_24)*a3.z;
 
         ns->h_t[i] = ITIME;
 
@@ -407,7 +415,7 @@ void Hermite4GPU::update_acc_jrk(int nact)
     sprintf(nacts, "nact for loop %d", nact);
     nvtxRangePushA(nacts);
     // nvtxRangePushA("nact for loop");
-    
+
     #pragma omp parallel for
     for (int i = 0; i < nact; i++)
     {

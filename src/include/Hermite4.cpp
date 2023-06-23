@@ -155,8 +155,9 @@ void Hermite4::save_old_acc_jrk(unsigned int nact)
 void Hermite4::alloc_arrays_host()
 {
     ns->h_f    = new Forces[ns->n];
-    ns->h_a2   = new double3[ns->n];
-    ns->h_a3   = new double3[ns->n];
+    // Getting rid of these since they don't need to be persistent
+    // ns->h_a2   = new double3[ns->n];
+    // ns->h_a3   = new double3[ns->n];
     ns->h_old  = new Forces[ns->n];
     ns->h_t    = new double[ns->n];
     ns->h_dt   = new double[ns->n];
@@ -173,8 +174,9 @@ void Hermite4::alloc_arrays_host()
 void Hermite4::free_arrays_host()
 {
     delete [] ns->h_f;
-    delete [] ns->h_a2;
-    delete [] ns->h_a3;
+    // Getting rid of these since they don't need to be persistent
+    // delete [] ns->h_a2;
+    // delete [] ns->h_a3;
     delete [] ns->h_old;
     delete [] ns->h_t;
     delete [] ns->h_dt;
@@ -214,8 +216,9 @@ void Hermite4::init_data()
         ns->h_f[i].a1[1] = 0.0;
         ns->h_f[i].a1[2] = 0.0;
 
-        ns->h_a2[i] = empty;
-        ns->h_a3[i] = empty;
+        // Getting rid of these because I don't think they need to be persistent and take GPU memory
+        // ns->h_a2[i] = empty;
+        // ns->h_a3[i] = empty;
 
         ns->h_old[i].a[0] = 0.0;
         ns->h_old[i].a[1] = 0.0;
