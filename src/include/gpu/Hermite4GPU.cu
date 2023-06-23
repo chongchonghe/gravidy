@@ -569,9 +569,12 @@ void Hermite4GPU::initial_data_transfer()
       CSC(cudaSetDevice(g));
       int shift = g*n_part[g-1];
       size_t d1_size = n_part[g] * sizeof(double);
+      size_t d4_size = n_part[g] * sizeof(double4);
 
       CSC(cudaMemcpyAsync(ns->d_t[g], ns->h_t + shift, d1_size, cudaMemcpyHostToDevice, 0));
       CSC(cudaMemcpyAsync(ns->d_dt[g], ns->h_dt + shift, d1_size, cudaMemcpyHostToDevice, 0));
+      CSC(cudaMemcpyAsync(ns->d_r[g], ns->h_r + shift, d4_size, cudaMemcpyHostToDevice, 0));
+      CSC(cudaMemcpyAsync(ns->d_v[g], ns->h_v + shift, d4_size, cudaMemcpyHostToDevice, 0));
   }
 }
 
