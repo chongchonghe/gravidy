@@ -252,14 +252,14 @@ void Hermite4GPU::predicted_pos_vel(double ITIME)
         get_kernel_error();
     }
 
-    for(int g = 0; g < gpus; g++)
-    {
-        CSC(cudaSetDevice(g));
-        size_t slice = g*n_part[g-1];
-        size_t pp_size = n_part[g] * sizeof(Predictor);
-
-        CSC(cudaMemcpyAsync(&ns->h_p[slice], ns->d_p[g], pp_size, cudaMemcpyDeviceToHost, 0));
-    }
+    // for(int g = 0; g < gpus; g++)
+    // {
+    //     CSC(cudaSetDevice(g));
+    //     size_t slice = g*n_part[g-1];
+    //     size_t pp_size = n_part[g] * sizeof(Predictor);
+    //
+    //     CSC(cudaMemcpyAsync(&ns->h_p[slice], ns->d_p[g], pp_size, cudaMemcpyDeviceToHost, 0));
+    // }
 
     ns->gtime.prediction_end += omp_get_wtime() - ns->gtime.prediction_ini;
 }
@@ -553,7 +553,7 @@ void Hermite4GPU::save_old_acc_jrk_gpu(unsigned int nact)
       k_save_old_acc_jrk <<< nblocks, nthreads >>> (ns->d_move[g],
                                                     ns->d_f[g], // input
                                                     ns->d_old[g], // output (written by this function)
-                                                    n_part[g]);
+                                                    nact);
       get_kernel_error();
   }
   // No memory copying necessary in either direction
