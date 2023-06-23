@@ -441,7 +441,7 @@ void Hermite4GPU::update_acc_jrk(unsigned int nact)
         {
             CSC(cudaSetDevice(g));
             // Copy to the GPU (d_i) the preddictor host array (h_i)
-            size_t chunk = nact * sizeof(Predictor);
+            size_t chunk = nact * sizeof(unsigned int);
             // CSC(cudaMemcpyAsync(ns->d_i[g], ns->h_i, chunk, cudaMemcpyHostToDevice, 0));
             CSC(cudaMemcpyAsync(ns->d_move[g], ns->h_move, chunk, cudaMemcpyHostToDevice, 0));
         }
