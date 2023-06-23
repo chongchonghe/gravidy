@@ -301,7 +301,7 @@ __global__ void k_correction(int *move,
                              double *dt,
                              double3 *a2,
                              double3 *a3,
-                             int dev_size,
+                             unsigned int dev_size,
                              double ITIME,
                              double ETA)
 {

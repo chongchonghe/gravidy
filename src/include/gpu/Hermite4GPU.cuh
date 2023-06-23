@@ -115,6 +115,7 @@ class Hermite4GPU : public Hermite4 {
 
         size_t i1_size;
         size_t d1_size;
+        size_t d3_size;
         size_t d4_size;
         size_t ff_size;
         size_t pp_size;
@@ -224,7 +225,7 @@ __global__ void k_correction(int *move,
                             double *dt,
                             double3 *a2,
                             double3 *a3,
-                            int dev_size,
+                            unsigned int dev_size,
                             double ITIME,
                             double ETA);
 
