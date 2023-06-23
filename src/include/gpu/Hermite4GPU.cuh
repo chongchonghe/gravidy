@@ -269,7 +269,7 @@ __device__ double k_normalize_dt(double &new_dt,
 /** Method in charge of saving the old values of the acceleration and
 * its first derivative to be use in the Corrector integration step
 */
-__device__ void k_save_old_acc_jrk(unsigned int *move,
+__global__ void k_save_old_acc_jrk(unsigned int *move,
                                   Forces *fin,
                                   Forces *fout,
                                   unsigned int dev_size);
