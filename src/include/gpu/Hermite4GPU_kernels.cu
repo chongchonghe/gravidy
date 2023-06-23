@@ -308,7 +308,7 @@ __global__ void k_assign_forces(unsigned int *move, // indices for subset, len d
   {
       // i is the particle to move (gets taken from (ns->h_)move)
       // i is an index into f
-      int i = move[thread_idx];
+      unsigned int i = move[thread_idx];
       f[i] = fin[thread_idx];
   }
 }
@@ -336,7 +336,7 @@ __global__ void k_correction(unsigned int *move,
   {
       // i is the particle to move (gets taken from (ns->h_)move)
       // i is an index into all the other arrays
-      int i = move[thread_idx];
+      unsigned int i = move[thread_idx];
 
       Forces ff = f[i];
       Forces oo = old[i];
@@ -513,7 +513,7 @@ __global__ void k_save_old_acc_jrk(unsigned int *move,
   {
       // i is the particle to move (gets taken from (ns->h_)move)
       // i is an index into fin and fout
-      int i = move[thread_idx];
+      unsigned int i = move[thread_idx];
       fout[i] = fin[i];
   }
 }

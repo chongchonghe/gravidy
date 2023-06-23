@@ -53,14 +53,14 @@ void Hermite4GPU::integration()
     init_acc_jrk();
     init_dt(ATIME, ETA_S, ITIME);
 
+    nvtxRangePushA("initial_data_transfer");
+    initial_data_transfer();
+    nvtxRangePop();
+
     // Initial energy calculation
     ns->en.ini = get_energy_gpu();   // Initial calculation of the energy of the system
     ns->en.tmp = ns->en.ini;
 
-    nvtxRangePushA("initial_data_transfer");
-    // After that's done, transfer t and dt while the GPU is sitting around
-    initial_data_transfer();
-    nvtxRangePop();
 
     // Getting system information:
     nu->nbody_attributes();
