@@ -158,6 +158,11 @@ void Hermite4GPU::alloc_arrays_device()
         CSC(cudaMemset(ns->d_t[g], 0, d1_size));
         CSC(cudaMemset(ns->d_i[g], 0, pp_size));
         CSC(cudaMemset(ns->d_dt[g], 0, d1_size));
+
+        CSC(cudaMemset(ns->d_a2[g], 0, d3_size));
+        CSC(cudaMemset(ns->d_a3[g], 0, d3_size));
+        CSC(cudaMemset(ns->d_old[g], 0, ff_size));
+
         CSC(cudaMemset(ns->d_ekin[g], 0, d1_size));
         CSC(cudaMemset(ns->d_epot[g], 0, d1_size));
         CSC(cudaMemset(ns->d_move[g], 0, i1_size));
@@ -213,41 +218,21 @@ void Hermite4GPU::free_arrays_device()
 void Hermite4GPU::predicted_pos_vel(double ITIME)
 {
     ns->gtime.prediction_ini = omp_get_wtime();
-    //#pragma omp parallel for
-    //for (int i = 0; i < ns->n; i++)
-    //{
-    //    double dt  = ITIME - ns->h_t[i];
-    //    double dt2 = 0.5*(dt  * dt);
-    //    double dt3 = 0.166666666666666*(dt * dt * dt);
 
-    //    Forces ff = ns->h_f[i];
-    //    double4 rr = ns->h_r[i];
-    //    double4 vv = ns->h_v[i];
-
-    //    ns->h_p[i].r[0] = (dt3 * ff.a1[0]) + (dt2 * ff.a[0]) + (dt * vv.x) + rr.x;
-    //    ns->h_p[i].r[1] = (dt3 * ff.a1[1]) + (dt2 * ff.a[1]) + (dt * vv.y) + rr.y;
-    //    ns->h_p[i].r[2] = (dt3 * ff.a1[2]) + (dt2 * ff.a[2]) + (dt * vv.z) + rr.z;
-
-    //    ns->h_p[i].v[0] = (dt2 * ff.a1[0]) + (dt * ff.a[0]) + vv.x;
-    //    ns->h_p[i].v[1] = (dt2 * ff.a1[1]) + (dt * ff.a[1]) + vv.y;
-    //    ns->h_p[i].v[2] = (dt2 * ff.a1[2]) + (dt * ff.a[2]) + vv.z;
-
-    //    ns->h_p[i].m = rr.w;
-    //}
-
-    for(int g = 0; g < gpus; g++)
-    {
-        CSC(cudaSetDevice(g));
-        int shift = g*n_part[g-1];
-        size_t ff_size = n_part[g] * sizeof(Forces);
-        size_t d4_size = n_part[g] * sizeof(double4);
-        size_t d1_size = n_part[g] * sizeof(double);
-
-        CSC(cudaMemcpyAsync(ns->d_f[g], ns->h_f + shift, ff_size, cudaMemcpyHostToDevice, 0));
-        CSC(cudaMemcpyAsync(ns->d_r[g], ns->h_r + shift, d4_size, cudaMemcpyHostToDevice, 0));
-        CSC(cudaMemcpyAsync(ns->d_v[g], ns->h_v + shift, d4_size, cudaMemcpyHostToDevice, 0));
-        CSC(cudaMemcpyAsync(ns->d_t[g], ns->h_t + shift, d1_size, cudaMemcpyHostToDevice, 0));
-    }
+    // for(int g = 0; g < gpus; g++)
+    // {
+    //     CSC(cudaSetDevice(g));
+    //     int shift = g*n_part[g-1];
+    //     size_t ff_size = n_part[g] * sizeof(Forces);
+    //     size_t d4_size = n_part[g] * sizeof(double4);
+    //     size_t d1_size = n_part[g] * sizeof(double);
+    //
+    //     // all already there (make sure they make it there the first time)
+    //     // CSC(cudaMemcpyAsync(ns->d_f[g], ns->h_f + shift, ff_size, cudaMemcpyHostToDevice, 0));
+    //     // CSC(cudaMemcpyAsync(ns->d_r[g], ns->h_r + shift, d4_size, cudaMemcpyHostToDevice, 0));
+    //     // CSC(cudaMemcpyAsync(ns->d_v[g], ns->h_v + shift, d4_size, cudaMemcpyHostToDevice, 0));
+    //     // CSC(cudaMemcpyAsync(ns->d_t[g], ns->h_t + shift, d1_size, cudaMemcpyHostToDevice, 0));
+    // }
 
     // Executing kernels
     for(int g = 0; g < gpus; g++)
@@ -288,25 +273,6 @@ void Hermite4GPU::correction_pos_vel(double ITIME, unsigned int nact)
     // Timer
     ns->gtime.correction_ini = omp_get_wtime();
 
-    for (int g = 0; g < gpus; g++) {
-      CSC(cudaSetDevice(g));
-      int shift = g*n_part[g-1];
-      size_t ff_size = n_part[g] * sizeof(Forces);
-      size_t d4_size = n_part[g] * sizeof(double4);
-      size_t d3_size = n_part[g] * sizeof(double3);
-      size_t d1_size = n_part[g] * sizeof(double);
-      // nact is only correct if 1 gpu (which we are doing). if more, then need to dynamically make a new n_part[g]
-      size_t  i_size = nact * sizeof(unsigned int);
-
-      CSC(cudaMemcpyAsync(ns->d_f[g], ns->h_f + shift, ff_size, cudaMemcpyHostToDevice, 0));
-      CSC(cudaMemcpyAsync(ns->d_old[g], ns->h_old + shift, ff_size, cudaMemcpyHostToDevice, 0));
-      // CSC(cudaMemcpyAsync(ns->d_r[g], ns->h_r + shift, d4_size, cudaMemcpyHostToDevice, 0));
-      // CSC(cudaMemcpyAsync(ns->d_v[g], ns->h_v + shift, d4_size, cudaMemcpyHostToDevice, 0));
-      // CSC(cudaMemcpyAsync(ns->d_t[g], ns->h_t + shift, d1_size, cudaMemcpyHostToDevice, 0));
-      CSC(cudaMemcpyAsync(ns->d_dt[g], ns->h_dt + shift, d1_size, cudaMemcpyHostToDevice, 0));
-      CSC(cudaMemcpyAsync(ns->d_move[g], ns->h_move + shift, i_size, cudaMemcpyHostToDevice, 0));
-    }
-
     // Executing kernels
     for (int g = 0; g < gpus; g++)
     {
@@ -343,7 +309,7 @@ void Hermite4GPU::correction_pos_vel(double ITIME, unsigned int nact)
         CSC(cudaMemcpyAsync(&ns->h_t[slice], ns->d_t[g], d1_size, cudaMemcpyDeviceToHost, 0));
         CSC(cudaMemcpyAsync(&ns->h_dt[slice], ns->d_dt[g], d1_size, cudaMemcpyDeviceToHost, 0));
         CSC(cudaMemcpyAsync(&ns->h_r[slice], ns->d_r[g], d4_size, cudaMemcpyDeviceToHost, 0));
-        CSC(cudaMemcpyAsync(&ns->h_v[slice], ns->d_v[g], d4_size, cudaMemcpyDeviceToHost, 0));
+        // CSC(cudaMemcpyAsync(&ns->h_v[slice], ns->d_v[g], d4_size, cudaMemcpyDeviceToHost, 0)); // not needed by every iteration
     }
 
     ns->gtime.correction_end += omp_get_wtime() - ns->gtime.correction_ini;
@@ -409,28 +375,8 @@ void Hermite4GPU::update_acc_jrk(unsigned int nact)
     // Timer begin
     ns->gtime.update_ini = omp_get_wtime();
 
-    //for(int g = 0; g < gpus; g++)
-    //{
-    //    if (n_part[g] > 0)
-    //    {
-    //        size_t pp_size = n_part[g] * sizeof(Predictor);
-    //        int shift = g*n_part[g-1];
 
-    //        CSC(cudaSetDevice(g));
-    //        // Copying to the device the predicted r and v
-    //        //CSC(cudaMemcpy(ns->d_p[g], ns->h_p + shift, pp_size, cudaMemcpyHostToDevice));
-    //        CSC(cudaMemcpyAsync(ns->d_p[g], ns->h_p + shift, pp_size, cudaMemcpyHostToDevice, 0));
-    //    }
-    //}
-
-    // Fill the h_i Predictor array with the particles that we need to move
-    // // nvtxRangePushA("nact for loop");
-    //
-    // #pragma omp parallel for
-    // for (int i = 0; i < nact; i++)
-    // {
-    //     ns->h_i[i] = ns->h_p[ns->h_move[i]];
-    // }
+    /// Send over the move array and let the GPU pull out that data.
 
     char nacts[128];
     sprintf(nacts, "nact for loop %d", nact);
@@ -546,7 +492,8 @@ void Hermite4GPU::update_acc_jrk(unsigned int nact)
 
     ///// CPU reduce forces across GPUs. Updates big F array with small subset F array
     ///// The zero initialization is because it assumes multiple GPUs and so must add.
-    //// We will assume 1 GPU for now.
+    //// We must assume 1 GPU for now.
+
     // #pragma omp parallel for
     // for (int i = 0; i < nact; i++)
     // {
@@ -567,27 +514,82 @@ void Hermite4GPU::update_acc_jrk(unsigned int nact)
     //     }
     // }
 
-    for(int g = 0; g < gpus; g++)
-    {
-        if (n_part[g] > 0)
-        {
-            CSC(cudaSetDevice(g));
-
-            size_t slice = g*n_part[g-1];
-            size_t ff_size = n_part[g] * sizeof(Forces);
-
-            // Copy from the GPU all forces, which have been updated
-            // old copy:
-            //CSC(cudaMemcpy(ns->h_fout_gpu[g], ns->d_fout_tmp[g], chunk, cudaMemcpyDeviceToHost));
-            CSC(cudaMemcpyAsync(&ns->h_f[slice], ns->d_f[g], ff_size, cudaMemcpyDeviceToHost, 0));
-        }
-    }
+    // for(int g = 0; g < gpus; g++)
+    // {
+    //     if (n_part[g] > 0)
+    //     {
+    //         CSC(cudaSetDevice(g));
+    //
+    //         size_t slice = g*n_part[g-1];
+    //         size_t ff_size = n_part[g] * sizeof(Forces);
+    //
+    //         // Copy from the GPU all forces, which have been updated
+    //         // old copy:
+    //         //CSC(cudaMemcpy(ns->h_fout_gpu[g], ns->d_fout_tmp[g], chunk, cudaMemcpyDeviceToHost));
+    //     }
+    // }
 
 
     ns->gtime.reduce_forces_end += omp_get_wtime() - ns->gtime.reduce_forces_ini;
 
     // Timer end
     ns->gtime.update_end += (omp_get_wtime() - ns->gtime.update_ini);
+}
+
+
+/** Method in charge of saving the old values of the acceleration and
+ * its first derivative to be use in the Corrector integration step
+ */
+void Hermite4GPU::save_old_acc_jrk_gpu(unsigned int nact)
+{
+  // Executing kernels
+  for(int g = 0; g < gpus; g++)
+  {
+      CSC(cudaSetDevice(g));
+
+      nthreads = BSIZE;
+      nblocks = std::ceil(nact/(float)nthreads); // only safe on 1 GPU
+
+      k_save_old_acc_jrk <<< nblocks, nthreads >>> (ns->d_move[g],
+                                                    ns->d_f[g], // input
+                                                    ns->d_old[g], // output (written by this function)
+                                                    n_part[g]);
+      get_kernel_error();
+  }
+  // No memory copying necessary in either direction
+}
+
+/**
+We have to transfer some data into the GPU once, at the beginning of the simulation.
+Necessary now because we are removing many of the unnecessary data movements.
+**/
+void Hermite4GPU::initial_data_transfer()
+{
+  for(int g = 0; g < gpus; g++)
+  {
+      CSC(cudaSetDevice(g));
+      int shift = g*n_part[g-1];
+      size_t d1_size = n_part[g] * sizeof(double);
+
+      CSC(cudaMemcpyAsync(ns->d_t[g], ns->h_t + shift, d1_size, cudaMemcpyHostToDevice, 0));
+      CSC(cudaMemcpyAsync(ns->d_dt[g], ns->h_dt + shift, d1_size, cudaMemcpyHostToDevice, 0));
+  }
+}
+
+/**
+Data only needed on writeout snapshots
+**/
+void Hermite4GPU::snapshot_data_transfer()
+{
+  for(int g = 0; g < gpus; g++)
+  {
+      CSC(cudaSetDevice(g));
+      size_t slice = g*n_part[g-1];
+      size_t ff_size = n_part[g] * sizeof(Forces);
+
+      CSC(cudaMemcpyAsync(&ns->h_f[slice], ns->d_f[g], ff_size, cudaMemcpyDeviceToHost, 0)); // only needed on writeout
+  }
+
 }
 
 /** Method in charge of calculating the potential and kinetic energy
@@ -603,7 +605,7 @@ double Hermite4GPU::get_energy_gpu()
     {
         CSC(cudaSetDevice(g));
 
-        CSC(cudaMemcpyAsync(ns->d_r[g], ns->h_r, d4_size, cudaMemcpyHostToDevice, 0));
+        // CSC(cudaMemcpyAsync(ns->d_r[g], ns->h_r, d4_size, cudaMemcpyHostToDevice, 0)); // correction already copies this
         CSC(cudaMemcpyAsync(ns->d_v[g], ns->h_v, d4_size, cudaMemcpyHostToDevice, 0));
     }
 
@@ -690,106 +692,106 @@ float Hermite4GPU::gpu_timer_stop(std::string f){
 void Hermite4GPU::force_calculation(const Predictor &pi, const Predictor &pj, Forces &fi) {}
 
 
-
-/**
-Some temporary functions that should be moved to GPU later
-**/
-/**
-Workshopping below here
-
-**/
-/** Vector magnitude calculation */
-double Hermite4GPU::get_magnitude(double x, double y, double z)
-{
-    return sqrt(x*x + y*y + z*z);
-}
-
-/** Time step calculation */
-double Hermite4GPU::get_timestep_normal(unsigned int i, float ETA)
-{
-    // Calculating a_{1,i}^{(2)} = a_{0,i}^{(2)} + dt * a_{0,i}^{(3)}
-    double ax1_2 = ns->h_a2[i].x + ns->h_dt[i] * ns->h_a3[i].x;
-    double ay1_2 = ns->h_a2[i].y + ns->h_dt[i] * ns->h_a3[i].y;
-    double az1_2 = ns->h_a2[i].z + ns->h_dt[i] * ns->h_a3[i].z;
-
-    // |a_{1,i}|
-    double abs_a1 = get_magnitude(ns->h_f[i].a[0],
-                                  ns->h_f[i].a[1],
-                                  ns->h_f[i].a[2]);
-    // |j_{1,i}|
-    double abs_j1 = get_magnitude(ns->h_f[i].a1[0],
-                                  ns->h_f[i].a1[1],
-                                  ns->h_f[i].a1[2]);
-    // |j_{1,i}|^{2}
-    double abs_j12  = abs_j1 * abs_j1;
-    // a_{1,i}^{(3)} = a_{0,i}^{(3)} because the 3rd-order interpolation
-    double abs_a1_3 = get_magnitude(ns->h_a3[i].x,
-                                    ns->h_a3[i].y,
-                                    ns->h_a3[i].z);
-    // |a_{1,i}^{(2)}|
-    double abs_a1_2 = get_magnitude(ax1_2, ay1_2, az1_2);
-    // |a_{1,i}^{(2)}|^{2}
-    double abs_a1_22  = abs_a1_2 * abs_a1_2;
-
-    double normal_dt = sqrt(ETA * ((abs_a1 * abs_a1_2 + abs_j12) / (abs_j1 * abs_a1_3 + abs_a1_22)));
-    return normal_dt;
-}
-
-/** Normalization of the timestep.
- * This method take care of the limits conditions to avoid large jumps between
- * the timestep distribution
- */
-double Hermite4GPU::normalize_dt(double new_dt, double old_dt, double t, unsigned int i)
-{
-    if (new_dt <= old_dt/8)
-    {
-        new_dt = D_TIME_MIN;
-    }
-    else if ( old_dt/8 < new_dt && new_dt <= old_dt/4)
-    {
-        new_dt = old_dt / 8;
-    }
-    else if ( old_dt/4 < new_dt && new_dt <= old_dt/2)
-    {
-        new_dt = old_dt / 4;
-    }
-    else if ( old_dt/2 < new_dt && new_dt <= old_dt)
-    {
-        new_dt = old_dt / 2;
-    }
-    else if ( old_dt < new_dt && new_dt <= old_dt * 2)
-    {
-        new_dt = old_dt;
-    }
-    else if (2 * old_dt < new_dt)
-    {
-        double val = t/(2 * old_dt);
-        //float val = t/(2 * old_dt);
-        if(std::ceil(val) == val)
-        {
-            new_dt = 2.0 * old_dt;
-        }
-        else
-        {
-            new_dt = old_dt;
-        }
-    }
-    else
-    {
-        //std::cerr << "this will never happen...I promise" << std::endl;
-        new_dt = old_dt;
-    }
-
-    //if (new_dt <= D_TIME_MIN)
-    if (new_dt < D_TIME_MIN)
-    {
-        new_dt = D_TIME_MIN;
-    }
-    //else if (new_dt >= D_TIME_MAX)
-    else if (new_dt > D_TIME_MAX)
-    {
-        new_dt = D_TIME_MAX;
-    }
-
-    return new_dt;
-}
+//
+// /**
+// Some temporary functions that should be moved to GPU later
+// **/
+// /**
+// Workshopping below here
+//
+// **/
+// /** Vector magnitude calculation */
+// double Hermite4GPU::get_magnitude(double x, double y, double z)
+// {
+//     return sqrt(x*x + y*y + z*z);
+// }
+//
+// /** Time step calculation */
+// double Hermite4GPU::get_timestep_normal(unsigned int i, float ETA)
+// {
+//     // Calculating a_{1,i}^{(2)} = a_{0,i}^{(2)} + dt * a_{0,i}^{(3)}
+//     double ax1_2 = ns->h_a2[i].x + ns->h_dt[i] * ns->h_a3[i].x;
+//     double ay1_2 = ns->h_a2[i].y + ns->h_dt[i] * ns->h_a3[i].y;
+//     double az1_2 = ns->h_a2[i].z + ns->h_dt[i] * ns->h_a3[i].z;
+//
+//     // |a_{1,i}|
+//     double abs_a1 = get_magnitude(ns->h_f[i].a[0],
+//                                   ns->h_f[i].a[1],
+//                                   ns->h_f[i].a[2]);
+//     // |j_{1,i}|
+//     double abs_j1 = get_magnitude(ns->h_f[i].a1[0],
+//                                   ns->h_f[i].a1[1],
+//                                   ns->h_f[i].a1[2]);
+//     // |j_{1,i}|^{2}
+//     double abs_j12  = abs_j1 * abs_j1;
+//     // a_{1,i}^{(3)} = a_{0,i}^{(3)} because the 3rd-order interpolation
+//     double abs_a1_3 = get_magnitude(ns->h_a3[i].x,
+//                                     ns->h_a3[i].y,
+//                                     ns->h_a3[i].z);
+//     // |a_{1,i}^{(2)}|
+//     double abs_a1_2 = get_magnitude(ax1_2, ay1_2, az1_2);
+//     // |a_{1,i}^{(2)}|^{2}
+//     double abs_a1_22  = abs_a1_2 * abs_a1_2;
+//
+//     double normal_dt = sqrt(ETA * ((abs_a1 * abs_a1_2 + abs_j12) / (abs_j1 * abs_a1_3 + abs_a1_22)));
+//     return normal_dt;
+// }
+//
+// /** Normalization of the timestep.
+//  * This method take care of the limits conditions to avoid large jumps between
+//  * the timestep distribution
+//  */
+// double Hermite4GPU::normalize_dt(double new_dt, double old_dt, double t, unsigned int i)
+// {
+//     if (new_dt <= old_dt/8)
+//     {
+//         new_dt = D_TIME_MIN;
+//     }
+//     else if ( old_dt/8 < new_dt && new_dt <= old_dt/4)
+//     {
+//         new_dt = old_dt / 8;
+//     }
+//     else if ( old_dt/4 < new_dt && new_dt <= old_dt/2)
+//     {
+//         new_dt = old_dt / 4;
+//     }
+//     else if ( old_dt/2 < new_dt && new_dt <= old_dt)
+//     {
+//         new_dt = old_dt / 2;
+//     }
+//     else if ( old_dt < new_dt && new_dt <= old_dt * 2)
+//     {
+//         new_dt = old_dt;
+//     }
+//     else if (2 * old_dt < new_dt)
+//     {
+//         double val = t/(2 * old_dt);
+//         //float val = t/(2 * old_dt);
+//         if(std::ceil(val) == val)
+//         {
+//             new_dt = 2.0 * old_dt;
+//         }
+//         else
+//         {
+//             new_dt = old_dt;
+//         }
+//     }
+//     else
+//     {
+//         //std::cerr << "this will never happen...I promise" << std::endl;
+//         new_dt = old_dt;
+//     }
+//
+//     //if (new_dt <= D_TIME_MIN)
+//     if (new_dt < D_TIME_MIN)
+//     {
+//         new_dt = D_TIME_MIN;
+//     }
+//     //else if (new_dt >= D_TIME_MAX)
+//     else if (new_dt > D_TIME_MAX)
+//     {
+//         new_dt = D_TIME_MAX;
+//     }
+//
+//     return new_dt;
+// }

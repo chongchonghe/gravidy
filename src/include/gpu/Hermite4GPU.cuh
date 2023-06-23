@@ -134,6 +134,9 @@ class Hermite4GPU : public Hermite4 {
         void update_acc_jrk(unsigned int nact);
         void predicted_pos_vel(double ITIME);
         void correction_pos_vel(double ITIME, unsigned int nact);
+        void save_old_acc_jrk_gpu(unsigned int nact);
+        void initial_data_transfer();
+        void snapshot_data_transfer();
         void integration();
 
         void get_kernel_error();
@@ -142,10 +145,10 @@ class Hermite4GPU : public Hermite4 {
 
         double get_energy_gpu();
 
-        // temporarily here
-        double get_magnitude(double x, double y, double z);
-        double get_timestep_normal(unsigned int i, float ETA);
-        double normalize_dt(double new_dt, double old_dt, double t, unsigned int i);
+        // // temporarily here
+        // double get_magnitude(double x, double y, double z);
+        // double get_timestep_normal(unsigned int i, float ETA);
+        // double normalize_dt(double new_dt, double old_dt, double t, unsigned int i);
 
 };
 
@@ -260,6 +263,16 @@ but does not use it, so I dropped that argument.
 __device__ double k_normalize_dt(double &new_dt,
                          const double &old_dt,
                          const double &t);
+
+
+
+/** Method in charge of saving the old values of the acceleration and
+* its first derivative to be use in the Corrector integration step
+*/
+__device__ void k_save_old_acc_jrk(unsigned int *move,
+                                  Forces *fin,
+                                  Forces *fout,
+                                  unsigned int dev_size);
 
 
 #endif

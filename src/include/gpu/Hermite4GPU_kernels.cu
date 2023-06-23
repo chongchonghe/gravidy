@@ -495,3 +495,25 @@ __device__ double k_normalize_dt(double &new_dt,
 
   return new_dt;
 }
+
+
+/** Method in charge of saving the old values of the acceleration and
+ * its first derivative to be use in the Corrector integration step
+ */
+__global__ void k_save_old_acc_jrk(unsigned int *move,
+                                   Forces *fin,
+                                   Forces *fout,
+                                   unsigned int dev_size)
+{
+
+  // thread index
+  int thread_idx = threadIdx.x + blockDim.x * blockIdx.x;
+
+  if (thread_idx < dev_size)
+  {
+      // i is the particle to move (gets taken from (ns->h_)move)
+      // i is an index into fin and fout
+      int i = move[thread_idx];
+      fout[i] = fin[i];
+  }
+}
