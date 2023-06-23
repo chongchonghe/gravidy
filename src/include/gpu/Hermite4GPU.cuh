@@ -211,4 +211,45 @@ __global__ void k_energy(double4 *r,
                          int n,
                          int dev_size,
                          int dev);
+
+
+
+__global__ void k_correction(int *move,
+                            Forces *f,
+                            Forces *old,
+                            Predictor *p,
+                            double4 *r,
+                            double4 *v,
+                            double *t,
+                            double *dt,
+                            double3 *a2,
+                            double3 *a3,
+                            int dev_size,
+                            double ITIME,
+                            double ETA);
+
+/** Vector magnitude calculation; copied from the one in NbodyUtils **/
+__device__ k_get_magnitude(const double &x, const double &y, const double &z);
+
+
+/** Time step calculation; copied from the one in NbodyUtils.
+Used to take an unsigned int i argument but I got rid if it.
+**/
+__device__ k_get_timestep_normal(const float &ETA,
+                                 const double3 &a2,
+                                 const double3 &a3,
+                                 const double &dt,
+                                 const Forces &f);
+
+/** Normalization of the timestep.
+* This method take care of the limits conditions to avoid large jumps between
+* the timestep distribution
+Copied from the version in NbodyUtils; that version takes an argument "unsigned int i"
+but does not use it, so I dropped that argument.
+**/
+__device__ k_normalize_dt(double &new_dt,
+                         const double &old_dt,
+                         const double &t);
+
+
 #endif

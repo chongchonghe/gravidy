@@ -109,6 +109,7 @@ Hermite4GPU::Hermite4GPU(NbodySystem *ns, Logger *logger, NbodyUtils *nu)
 
     i1_size = ns->n * sizeof(int);
     d1_size = ns->n * sizeof(double);
+    d3_size = ns->n * sizeof(double3);
     d4_size = ns->n * sizeof(double4);
     ff_size = ns->n * sizeof(Forces);
     pp_size = ns->n * sizeof(Predictor);
@@ -139,6 +140,11 @@ void Hermite4GPU::alloc_arrays_device()
         CSC(cudaMalloc((void**)&ns->d_t[g], d1_size));
         CSC(cudaMalloc((void**)&ns->d_i[g], pp_size));
         CSC(cudaMalloc((void**)&ns->d_dt[g], d1_size));
+
+        CSC(cudaMalloc((void**)&ns->d_a2[g], d3_size));
+        CSC(cudaMalloc((void**)&ns->d_a3[g], d3_size));
+        CSC(cudaMalloc((void**)&ns->d_old[g], ff_size));
+
         CSC(cudaMalloc((void**)&ns->d_ekin[g], d1_size));
         CSC(cudaMalloc((void**)&ns->d_epot[g], d1_size));
         CSC(cudaMalloc((void**)&ns->d_move[g], i1_size));
@@ -182,6 +188,11 @@ void Hermite4GPU::free_arrays_device()
         CSC(cudaFree(ns->d_t[g]));
         CSC(cudaFree(ns->d_i[g]));
         CSC(cudaFree(ns->d_dt[g]));
+
+        CSC(cudaFree(ns->d_a2[g]));
+        CSC(cudaFree(ns->d_a3[g]));
+        CSC(cudaFree(ns->d_old[g]));
+
         CSC(cudaFree(ns->d_ekin[g]));
         CSC(cudaFree(ns->d_epot[g]));
         CSC(cudaFree(ns->d_move[g]));
@@ -277,85 +288,64 @@ void Hermite4GPU::correction_pos_vel(double ITIME, unsigned int nact)
     // Timer
     ns->gtime.correction_ini = omp_get_wtime();
 
-    // i is the particle to move (gets taken from ns->h_move)
-    /** in the more-gpu less-copy rewrite, we want this to just use d_ arrays. **/
-    unsigned int i;
-    #pragma omp parallel for private(i)
-    for (unsigned int k = 0; k < nact; k++)
-    {
-        i = ns->h_move[k];
+    for (int g = 0; g < gpus; g++) {
+      CSC(cudaSetDevice(g));
+      int shift = g*n_part[g-1];
+      size_t ff_size = n_part[g] * sizeof(Forces);
+      size_t d4_size = n_part[g] * sizeof(double4);
+      size_t d3_size = n_part[g] * sizeof(double3);
+      size_t d1_size = n_part[g] * sizeof(double);
+      // nact is only correct if 1 gpu (which we are doing). if more, then need to dynamically make a new n_part[g]
+      size_t  i_size = nact * sizeof(unsigned int);
 
-        Forces ff = ns->h_f[i];
-        Forces oo = ns->h_old[i];
-        Predictor pp = ns->h_p[i];
-
-        double dt1 = ns->h_dt[i];
-        double dt2 = dt1 * dt1;
-        double dt3 = dt2 * dt1;
-        double dt4 = dt2 * dt2;
-        double dt5 = dt4 * dt1;
-
-        double dt2inv = 1.0/dt2;
-        double dt3inv = 1.0/dt3;
-
-        double dt3_6 = 0.166666666666666*dt3;
-        double dt4_24 = 0.041666666666666*dt4;
-        double dt5_120 = 0.008333333333333*dt5;
-
-        // Keeping these local; do they need to be initialized?
-        // double3 a2;
-        // double3 a3;
-
-        // Acceleration 2nd derivate
-        ns->h_a2[i].x = (-6 * (oo.a[0] - ff.a[0] ) - dt1 * (4 * oo.a1[0] + 2 * ff.a1[0]) ) * dt2inv;
-        ns->h_a2[i].y = (-6 * (oo.a[1] - ff.a[1] ) - dt1 * (4 * oo.a1[1] + 2 * ff.a1[1]) ) * dt2inv;
-        ns->h_a2[i].z = (-6 * (oo.a[2] - ff.a[2] ) - dt1 * (4 * oo.a1[2] + 2 * ff.a1[2]) ) * dt2inv;
-
-        // Acceleration 3rd derivate
-        ns->h_a3[i].x = (12 * (oo.a[0] - ff.a[0] ) + 6 * dt1 * (oo.a1[0] + ff.a1[0]) ) * dt3inv;
-        ns->h_a3[i].y = (12 * (oo.a[1] - ff.a[1] ) + 6 * dt1 * (oo.a1[1] + ff.a1[1]) ) * dt3inv;
-        ns->h_a3[i].z = (12 * (oo.a[2] - ff.a[2] ) + 6 * dt1 * (oo.a1[2] + ff.a1[2]) ) * dt3inv;
-
-
-        // Correcting position
-        ns->h_r[i].x = pp.r[0] + (dt4_24)*ns->h_a2[i].x + (dt5_120)*ns->h_a3[i].x;
-        ns->h_r[i].y = pp.r[1] + (dt4_24)*ns->h_a2[i].y + (dt5_120)*ns->h_a3[i].y;
-        ns->h_r[i].z = pp.r[2] + (dt4_24)*ns->h_a2[i].z + (dt5_120)*ns->h_a3[i].z;
-
-        // Correcting velocity
-        ns->h_v[i].x = pp.v[0] + (dt3_6)*ns->h_a2[i].x + (dt4_24)*ns->h_a3[i].x;
-        ns->h_v[i].y = pp.v[1] + (dt3_6)*ns->h_a2[i].y + (dt4_24)*ns->h_a3[i].y;
-        ns->h_v[i].z = pp.v[2] + (dt3_6)*ns->h_a2[i].z + (dt4_24)*ns->h_a3[i].z;
-
-        /**
-        // Acceleration 2nd derivate
-        a2.x = (-6 * (oo.a[0] - ff.a[0] ) - dt1 * (4 * oo.a1[0] + 2 * ff.a1[0]) ) * dt2inv;
-        a2.y = (-6 * (oo.a[1] - ff.a[1] ) - dt1 * (4 * oo.a1[1] + 2 * ff.a1[1]) ) * dt2inv;
-        a2.z = (-6 * (oo.a[2] - ff.a[2] ) - dt1 * (4 * oo.a1[2] + 2 * ff.a1[2]) ) * dt2inv;
-
-        // Acceleration 3rd derivate
-        a3.x = (12 * (oo.a[0] - ff.a[0] ) + 6 * dt1 * (oo.a1[0] + ff.a1[0]) ) * dt3inv;
-        a3.y = (12 * (oo.a[1] - ff.a[1] ) + 6 * dt1 * (oo.a1[1] + ff.a1[1]) ) * dt3inv;
-        a3.z = (12 * (oo.a[2] - ff.a[2] ) + 6 * dt1 * (oo.a1[2] + ff.a1[2]) ) * dt3inv;
-
-
-        // Correcting position
-        ns->h_r[i].x = pp.r[0] + (dt4_24)*a2.x + (dt5_120)*a3.x;
-        ns->h_r[i].y = pp.r[1] + (dt4_24)*a2.y + (dt5_120)*a3.y;
-        ns->h_r[i].z = pp.r[2] + (dt4_24)*a2.z + (dt5_120)*a3.z;
-
-        // Correcting velocity
-        ns->h_v[i].x = pp.v[0] + (dt3_6)*a2.x + (dt4_24)*a3.x;
-        ns->h_v[i].y = pp.v[1] + (dt3_6)*a2.y + (dt4_24)*a3.y;
-        ns->h_v[i].z = pp.v[2] + (dt3_6)*a2.z + (dt4_24)*a3.z;
-        **/
-
-        ns->h_t[i] = ITIME;
-
-        double normal_dt  = get_timestep_normal(i, ns->eta);
-        ns->h_dt[i] = normalize_dt(normal_dt, ns->h_dt[i], ns->h_t[i], i);
-
+      CSC(cudaMemcpyAsync(ns->d_f[g], ns->h_f + shift, ff_size, cudaMemcpyHostToDevice, 0));
+      CSC(cudaMemcpyAsync(ns->d_old[g], ns->h_old + shift, ff_size, cudaMemcpyHostToDevice, 0));
+      // CSC(cudaMemcpyAsync(ns->d_r[g], ns->h_r + shift, d4_size, cudaMemcpyHostToDevice, 0));
+      // CSC(cudaMemcpyAsync(ns->d_v[g], ns->h_v + shift, d4_size, cudaMemcpyHostToDevice, 0));
+      // CSC(cudaMemcpyAsync(ns->d_t[g], ns->h_t + shift, d1_size, cudaMemcpyHostToDevice, 0));
+      CSC(cudaMemcpyAsync(ns->d_dt[g], ns->h_dt + shift, d1_size, cudaMemcpyHostToDevice, 0));
+      CSC(cudaMemcpyAsync(ns->d_move[g], ns->h_move + shift, i_size, cudaMemcpyHostToDevice, 0));
     }
+
+    // Executing kernels
+    for (int g = 0; g < gpus; g++)
+    {
+      CSC(cudaSetDevice(g));
+
+      nthreads = BSIZE;
+      // nblocks = std::ceil(n_part[g]/(float)nthreads);
+      nblocks = std::ceil(nact/(float)nthreads); // nact, since this is only doing that many iterations
+
+      k_correction <<< nblocks, nthreads >>> (ns->d_move[g],
+                                              ns->d_f[g],
+                                              ns->d_old[g],
+                                              ns->d_p[g],
+                                              ns->d_r[g],
+                                              ns->d_v[g],
+                                              ns->d_t[g],
+                                              ns->d_dt[g],
+                                              ns->d_a2[g],
+                                              ns->d_a3[g],
+                                              nact,
+                                              ITIME,
+                                              ns->eta);
+      get_kernel_error();
+    }
+
+    for(int g = 0; g < gpus; g++)
+    {
+        // t, dt, a2, a3
+        CSC(cudaSetDevice(g));
+        size_t slice = g*n_part[g-1];
+        size_t d1_size = n_part[g] * sizeof(double);
+        size_t d4_size = n_part[g] * sizeof(double4);
+
+        CSC(cudaMemcpyAsync(&ns->h_t[slice], ns->d_t[g], d1_size, cudaMemcpyDeviceToHost, 0));
+        CSC(cudaMemcpyAsync(&ns->h_dt[slice], ns->d_dt[g], d1_size, cudaMemcpyDeviceToHost, 0));
+        CSC(cudaMemcpyAsync(&ns->h_r[slice], ns->d_r[g], d4_size, cudaMemcpyDeviceToHost, 0));
+        CSC(cudaMemcpyAsync(&ns->h_v[slice], ns->d_v[g], d4_size, cudaMemcpyDeviceToHost, 0));
+    }
+
     ns->gtime.correction_end += omp_get_wtime() - ns->gtime.correction_ini;
 }
 

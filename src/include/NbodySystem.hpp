@@ -136,6 +136,8 @@ class NbodySystem {
         Forces       *d_fout[MAXGPUS];
         Forces       *d_fout_tmp[MAXGPUS];
         Forces       *d_old[MAXGPUS];
+        double3      *d_a2[MAXGPUS];
+        double3      *d_a3[MAXGPUS];
 
 
         /******************************** General functions of the system */

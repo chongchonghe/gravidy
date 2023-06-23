@@ -291,7 +291,183 @@ __global__ void k_energy(double4 *r,
 
 
 
-// __global__ void k_correction()
-// {
-//
-// }
+__global__ void k_correction(int *move,
+                             Forces *f,
+                             Forces *old,
+                             Predictor *p,
+                             double4 *r,
+                             double4 *v,
+                             double *t,
+                             double *dt,
+                             double3 *a2,
+                             double3 *a3,
+                             int dev_size,
+                             double ITIME,
+                             double ETA)
+{
+  // thread index
+  int thread_idx = threadIdx.x + blockDim.x * blockIdx.x;
+
+  if (thread_idx < dev_size)
+  {
+      // i is the particle to move (gets taken from (ns->h_)move)
+      // i is an index into all the other arrays
+      int i = move[thread_idx];
+
+      Forces ff = f[i];
+      Forces oo = old[i];
+      Predictor pp = p[i];
+
+      double dt1 = dt[i];
+      double dt2 = dt1 * dt1;
+      double dt3 = dt2 * dt1;
+      double dt4 = dt2 * dt2;
+      double dt5 = dt4 * dt1;
+
+      double dt2inv = 1.0/dt2;
+      double dt3inv = 1.0/dt3;
+
+      double dt3_6 = 0.166666666666666*dt3;
+      double dt4_24 = 0.041666666666666*dt4;
+      double dt5_120 = 0.008333333333333*dt5;
+
+      // Acceleration 2nd derivate
+      a2[i].x = (-6 * (oo.a[0] - ff.a[0] ) - dt1 * (4 * oo.a1[0] + 2 * ff.a1[0]) ) * dt2inv;
+      a2[i].y = (-6 * (oo.a[1] - ff.a[1] ) - dt1 * (4 * oo.a1[1] + 2 * ff.a1[1]) ) * dt2inv;
+      a2[i].z = (-6 * (oo.a[2] - ff.a[2] ) - dt1 * (4 * oo.a1[2] + 2 * ff.a1[2]) ) * dt2inv;
+
+      // Acceleration 3rd derivate
+      a3[i].x = (12 * (oo.a[0] - ff.a[0] ) + 6 * dt1 * (oo.a1[0] + ff.a1[0]) ) * dt3inv;
+      a3[i].y = (12 * (oo.a[1] - ff.a[1] ) + 6 * dt1 * (oo.a1[1] + ff.a1[1]) ) * dt3inv;
+      a3[i].z = (12 * (oo.a[2] - ff.a[2] ) + 6 * dt1 * (oo.a1[2] + ff.a1[2]) ) * dt3inv;
+
+
+      // Correcting position
+      r[i].x = pp.r[0] + (dt4_24)*a2[i].x + (dt5_120)*a3[i].x;
+      r[i].y = pp.r[1] + (dt4_24)*a2[i].y + (dt5_120)*a3[i].y;
+      r[i].z = pp.r[2] + (dt4_24)*a2[i].z + (dt5_120)*a3[i].z;
+
+      // Correcting velocity
+      v[i].x = pp.v[0] + (dt3_6)*a2.[i]x +   (dt4_24)*a3[i].x;
+      v[i].y = pp.v[1] + (dt3_6)*a2.[i]y +   (dt4_24)*a3[i].y;
+      v[i].z = pp.v[2] + (dt3_6)*a2.[i]z +   (dt4_24)*a3[i].z;
+
+      t[i] = ITIME;
+      double normal_dt = k_get_timestep_normal(ETA, a2[i], a3[i], dt[i], ff);
+      dt[i] = k_normalize_dt(normal_dt, dt[i], t[i]);
+
+  }
+
+}
+
+/** Vector magnitude calculation; copied from the one in NbodyUtils **/
+__device__ k_get_magnitude(const double &x, const double &y, const double &z)
+{
+  return sqrt(x*x + y*y + z*z);
+}
+
+/** Time step calculation; copied from the one in NbodyUtils.
+Used to take an unsigned int i argument but I got rid if it.
+**/
+__device__ k_get_timestep_normal(const float &ETA,
+                                 const double3 &a2,
+                                 const double3 &a3,
+                                 const double &dt,
+                                 const Forces &f)
+{
+  // Calculating a_{1,i}^{(2)} = a_{0,i}^{(2)} + dt * a_{0,i}^{(3)}
+  double ax1_2 = a2.x + dt * a3.x;
+  double ay1_2 = a2.y + dt * a3.y;
+  double az1_2 = a2.z + dt * a3.z;
+
+  // |a_{1,i}|
+  double abs_a1 = k_get_magnitude(f.a[0],
+                                f.a[1],
+                                f.a[2]);
+  // |j_{1,i}|
+  double abs_j1 = k_get_magnitude(f.a1[0],
+                                f.a1[1],
+                                f.a1[2]);
+  // |j_{1,i}|^{2}
+  double abs_j12  = abs_j1 * abs_j1;
+  // a_{1,i}^{(3)} = a_{0,i}^{(3)} because the 3rd-order interpolation
+  double abs_a1_3 = k_get_magnitude(a3.x,
+                                  a3.y,
+                                  a3.z);
+  // |a_{1,i}^{(2)}|
+  double abs_a1_2 = k_get_magnitude(ax1_2, ay1_2, az1_2);
+  // |a_{1,i}^{(2)}|^{2}
+  double abs_a1_22  = abs_a1_2 * abs_a1_2;
+
+  // variable used to be called "normal_dt" and was returned (just skipping the new variable declaration)
+  return sqrt(ETA * ((abs_a1 * abs_a1_2 + abs_j12) / (abs_j1 * abs_a1_3 + abs_a1_22)));
+}
+
+/** Normalization of the timestep.
+ * This method take care of the limits conditions to avoid large jumps between
+ * the timestep distribution
+ Copied from the version in NbodyUtils; that version takes an argument "unsigned int i"
+ but does not use it, so I dropped that argument.
+
+ For this, the local copy of new_dt is rewritten a lot, so I'm letting that one
+ be non-constant. In k_correction, a newly declared variable (not used after this)
+ is passed in as new_dt, so I will let it be pass-by-reference since we don't need
+ to keep that data safe past this function.
+ old_dt and t are still pass by reference and constant.
+ */
+__device__ k_normalize_dt(double &new_dt,
+                          const double &old_dt,
+                          const double &t)
+{
+  if (new_dt <= old_dt/8)
+  {
+      new_dt = D_TIME_MIN;
+  }
+  else if ( old_dt/8 < new_dt && new_dt <= old_dt/4)
+  {
+      new_dt = old_dt / 8;
+  }
+  else if ( old_dt/4 < new_dt && new_dt <= old_dt/2)
+  {
+      new_dt = old_dt / 4;
+  }
+  else if ( old_dt/2 < new_dt && new_dt <= old_dt)
+  {
+      new_dt = old_dt / 2;
+  }
+  else if ( old_dt < new_dt && new_dt <= old_dt * 2)
+  {
+      new_dt = old_dt;
+  }
+  else if (2 * old_dt < new_dt)
+  {
+      double val = t/(2 * old_dt);
+      //float val = t/(2 * old_dt);
+      if(std::ceil(val) == val)
+      {
+          new_dt = 2.0 * old_dt;
+      }
+      else
+      {
+          new_dt = old_dt;
+      }
+  }
+  else
+  {
+      //std::cerr << "this will never happen...I promise" << std::endl;
+      new_dt = old_dt;
+  }
+
+  //if (new_dt <= D_TIME_MIN)
+  if (new_dt < D_TIME_MIN)
+  {
+      new_dt = D_TIME_MIN;
+  }
+  //else if (new_dt >= D_TIME_MAX)
+  else if (new_dt > D_TIME_MAX)
+  {
+      new_dt = D_TIME_MAX;
+  }
+
+  return new_dt;
+}
