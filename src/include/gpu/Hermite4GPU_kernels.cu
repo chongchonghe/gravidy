@@ -291,7 +291,7 @@ __global__ void k_energy(double4 *r,
 
 
 
-__global__ void k_correction(int *move,
+__global__ void k_correction(unsigned int *move,
                              Forces *f,
                              Forces *old,
                              Predictor *p,
