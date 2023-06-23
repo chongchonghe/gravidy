@@ -13,5 +13,5 @@ module load cuda11.7/toolkit/11.7.1
 export OMP_NUM_THREADS=4
 export TMPDIR=$(pwd)
 mkdir -p out
-nsys profile --trace=cuda,nvtx,osrt ../../../../src/gravidy-gpu -i ../../../input/gravidy-default-input/08-nbody-p16384_m1.in -o out/output -t 0.0002 -z 0.0002
-
+nsys profile --trace=cuda,nvtx,osrt ../../../../src/gravidy-gpu -i ../../../input/gravidy-default-input/08-nbody-p16384_m1.in -o out/output -t 0.125 -z 0.2
+# nsys profile --trace=cuda,nvtx,osrt ../../../../src/gravidy-gpu -i ../../../input/gravidy-default-input/08-nbody-p16384_m1.in -o out/output -t 0.0002 -z 0.0002
