@@ -340,7 +340,12 @@ void Hermite4CPU::update_acc_jrk(unsigned int nact)
 void Hermite4CPU::predicted_pos_vel(double ITIME)
 {
 
+    // #pragma acc data present(ns->h_p[0:ns->n],ns->h_v[0:ns->n],ns->h_f[0:ns->n],ns->h_r[0:ns->n],ns->h_t[0:ns->n]) copyout(ns->h_p[0:ns->n],ns->h_v[0:ns->n],ns->h_f[0:ns->n],ns->h_r[0:ns->n],ns->h_t[0:ns->n]) copyin(ns->h_p[0:ns->n],ns->h_v[0:ns->n],ns->h_f[0:ns->n],ns->h_r[0:ns->n],ns->h_t[0:ns->n]) create(ns->h_p[0:ns->n],ns->h_v[0:ns->n],ns->h_f[0:ns->n],ns->h_r[0:ns->n],ns->h_t[0:ns->n]) async 
     ns->gtime.prediction_ini = omp_get_wtime();
+    // 
+    // #pragma acc data 
+    // {
+    #pragma acc parallel loop copyin(this, ns[0:1], ns->h_f[0:ns->n], ns->h_r[0:ns->n], ns->h_v[0:ns->n], ns->h_t[0:ns->n]) copyout(ns->h_p[0:ns->n]) firstprivate(ITIME) default(present)
     for (unsigned int i = 0; i < ns->n; i++)
     {
         double dt  = ITIME - ns->h_t[i];
@@ -361,7 +366,9 @@ void Hermite4CPU::predicted_pos_vel(double ITIME)
         ns->h_p[i].m = ns->h_r[i].w;
 
     }
+    // }
     ns->gtime.prediction_end += omp_get_wtime() - ns->gtime.prediction_ini;
+    std::cout << "CCH here!!! " << ns->h_p[0].r[0] << std::endl;
 }
 
 /** Method that correct the positions and velocities of the particles at the

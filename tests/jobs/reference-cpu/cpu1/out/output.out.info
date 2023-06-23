@@ -1,0 +1,8 @@
+# NumberParticles:                     128
+# Softening:                        0.0001
+# EtaTimestep:                        0.01
+# IntegrationTime:                     0.1
+# PrintScreen:                           0
+# InputFilename:      ../../../input/gravidy-default-input/01-nbody-p128_m1.in
+# OutputFilename:     out/output.out      
+# SnapshotNumber:                        2

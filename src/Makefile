@@ -6,9 +6,11 @@ MPI_LIB_PATH=$(OPENMPI_LIBDIR)
 MPI_INC_PATH=$(OPENMPI_INCDIR)
 
 # Compilers
-CXX=  g++
+# CXX=  g++
 # NVCC= $(CUDA_PATH)/bin/nvcc
 NVCC= nvcc
+
+CXX= nvc++
 
 # FLAGS
 
@@ -41,11 +43,11 @@ CXXFLAGS  = $(BOOSTFLAGS)
 CXXFLAGS += -O3 # Optimisation
 CXXFLAGS += -Wall # Warning messages
 CXXFLAGS += -fopenmp # Enable OpenMP
-CXXFLAGS += -pipe # Pipes over temp files in the process
-CXXFLAGS += -fstack-protector # Emit extra code to check buffer overflow
+# CXXFLAGS += -pipe # Pipes over temp files in the process
+# CXXFLAGS += -fstack-protector # Emit extra code to check buffer overflow
 CXXFLAGS += -Wformat-security # Prevent formats vulnerabilities
 CXXFLAGS += -Wpointer-arith # Prevent void size
-CXXFLAGS += -Wformat-nonliteral # Prevent non literal format string
+# CXXFLAGS += -Wformat-nonliteral # Prevent non literal format string
 CXXFLAGS += -rdynamic # Exported symbols in dynamics symbol table
 ifeq ($(shell uname), Darwin)
 	CXXFLAGS += -Wl,-headerpad_max_install_names
@@ -62,6 +64,7 @@ endif
 ifeq ($(DEBUG),1)
 	CXXFLAGS += -DDEBUG -g # Debugging
 endif
+CXXFLAGS+=-Minfo=acc -acc
 
 # MPI FLAGS
 MPIFLAGS  = -L$(MPI_LIB_PATH)
