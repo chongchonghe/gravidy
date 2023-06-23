@@ -221,7 +221,7 @@ Keep this operation on GPU so that we don't move the force array back to GPU.
 __global__ void k_assign_forces(unsigned int *move,
                                Forces *fin,
                                Forces *f,
-                               unsigned int dev_size,);
+                               unsigned int dev_size);
 
 
 __global__ void k_correction(unsigned int *move,

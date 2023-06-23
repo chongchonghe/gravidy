@@ -298,7 +298,7 @@ Keep this operation on GPU so that we don't move the force array back to GPU.
 __global__ void k_assign_forces(unsigned int *move, // indices for subset, len dev_size
                                 Forces *fin, // in array (subset of particles, indexed using move)
                                 Forces *f, // out array (entire set of particles)
-                                unsigned int dev_size, // number of particles to update (len of move)
+                                unsigned int dev_size // number of particles to update (len of move)
                                 )
 {
   // thread index; also index of move and fin
