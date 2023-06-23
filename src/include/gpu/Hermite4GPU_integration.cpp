@@ -102,7 +102,9 @@ void Hermite4GPU::integration()
         update_acc_jrk(nact);
         nvtxRangePop();
 
+        nvtxRangePushA("correction_pos_vel");
         correction_pos_vel(ITIME, nact);
+        nvtxRangePop();
 
         // Update the amount of interactions counter
         interactions += nact * ns->n;
