@@ -375,25 +375,6 @@ void Hermite4GPU::update_acc_jrk(unsigned int nact)
     // Timer begin
     ns->gtime.update_ini = omp_get_wtime();
 
-
-    /// Send over the move array and let the GPU pull out that data.
-
-    char nacts[128];
-    sprintf(nacts, "nact for loop %d", nact);
-    nvtxRangePushA(nacts);
-    for(int g = 0; g < gpus; g++)
-    {
-        if (n_part[g] > 0)
-        {
-            CSC(cudaSetDevice(g));
-            // Copy to the GPU (d_i) the preddictor host array (h_i)
-            size_t chunk = nact * sizeof(unsigned int);
-            // CSC(cudaMemcpyAsync(ns->d_i[g], ns->h_i, chunk, cudaMemcpyHostToDevice, 0));
-            CSC(cudaMemcpyAsync(ns->d_move[g], ns->h_move, chunk, cudaMemcpyHostToDevice, 0));
-        }
-    }
-    nvtxRangePop();
-
     ns->gtime.grav_ini = omp_get_wtime();
     for(int g = 0; g < gpus; g++)
     {
@@ -542,6 +523,24 @@ void Hermite4GPU::update_acc_jrk(unsigned int nact)
  */
 void Hermite4GPU::save_old_acc_jrk_gpu(unsigned int nact)
 {
+
+  /// Send over the move array and let the GPU pull out that data.
+  char nacts[128];
+  sprintf(nacts, "nact for loop %d", nact);
+  nvtxRangePushA(nacts);
+  for(int g = 0; g < gpus; g++)
+  {
+      if (n_part[g] > 0)
+      {
+          CSC(cudaSetDevice(g));
+          // Copy to the GPU (d_i) the preddictor host array (h_i)
+          size_t chunk = nact * sizeof(unsigned int);
+          // CSC(cudaMemcpyAsync(ns->d_i[g], ns->h_i, chunk, cudaMemcpyHostToDevice, 0));
+          CSC(cudaMemcpyAsync(ns->d_move[g], ns->h_move, chunk, cudaMemcpyHostToDevice, 0));
+      }
+  }
+  nvtxRangePop();
+
   // Executing kernels
   for(int g = 0; g < gpus; g++)
   {
