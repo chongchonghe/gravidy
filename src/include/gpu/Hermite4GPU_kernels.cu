@@ -286,3 +286,12 @@ __global__ void k_energy(double4 *r,
         epot[i] = epot_tmp;
     }
 }
+
+
+
+
+
+// __global__ void k_correction()
+// {
+//
+// }

@@ -303,9 +303,8 @@ void Hermite4GPU::correction_pos_vel(double ITIME, unsigned int nact)
         double dt5_120 = 0.008333333333333*dt5;
 
         // Keeping these local; do they need to be initialized?
-        // double3 a2 = {0};
-        // double3 a3 = {0};
-
+        // double3 a2;
+        // double3 a3;
 
         // Acceleration 2nd derivate
         ns->h_a2[i].x = (-6 * (oo.a[0] - ff.a[0] ) - dt1 * (4 * oo.a1[0] + 2 * ff.a1[0]) ) * dt2inv;
@@ -327,7 +326,6 @@ void Hermite4GPU::correction_pos_vel(double ITIME, unsigned int nact)
         ns->h_v[i].x = pp.v[0] + (dt3_6)*ns->h_a2[i].x + (dt4_24)*ns->h_a3[i].x;
         ns->h_v[i].y = pp.v[1] + (dt3_6)*ns->h_a2[i].y + (dt4_24)*ns->h_a3[i].y;
         ns->h_v[i].z = pp.v[2] + (dt3_6)*ns->h_a2[i].z + (dt4_24)*ns->h_a3[i].z;
-
 
         /**
         // Acceleration 2nd derivate
@@ -354,8 +352,8 @@ void Hermite4GPU::correction_pos_vel(double ITIME, unsigned int nact)
 
         ns->h_t[i] = ITIME;
 
-        double normal_dt  = nu->get_timestep_normal(i, ns->eta);
-        ns->h_dt[i] = nu->normalize_dt(normal_dt, ns->h_dt[i], ns->h_t[i], i);
+        double normal_dt  = get_timestep_normal(i, ns->eta);
+        ns->h_dt[i] = normalize_dt(normal_dt, ns->h_dt[i], ns->h_t[i], i);
 
     }
     ns->gtime.correction_end += omp_get_wtime() - ns->gtime.correction_ini;
@@ -672,3 +670,108 @@ float Hermite4GPU::gpu_timer_stop(std::string f){
  * to perfom the force calculation, not a host method.
  */
 void Hermite4GPU::force_calculation(const Predictor &pi, const Predictor &pj, Forces &fi) {}
+
+
+
+/**
+Some temporary functions that should be moved to GPU later
+**/
+/**
+Workshopping below here
+
+**/
+/** Vector magnitude calculation */
+double Hermite4GPU::get_magnitude(double x, double y, double z)
+{
+    return sqrt(x*x + y*y + z*z);
+}
+
+/** Time step calculation */
+double Hermite4GPU::get_timestep_normal(unsigned int i, float ETA)
+{
+    // Calculating a_{1,i}^{(2)} = a_{0,i}^{(2)} + dt * a_{0,i}^{(3)}
+    double ax1_2 = ns->h_a2[i].x + ns->h_dt[i] * ns->h_a3[i].x;
+    double ay1_2 = ns->h_a2[i].y + ns->h_dt[i] * ns->h_a3[i].y;
+    double az1_2 = ns->h_a2[i].z + ns->h_dt[i] * ns->h_a3[i].z;
+
+    // |a_{1,i}|
+    double abs_a1 = get_magnitude(ns->h_f[i].a[0],
+                                  ns->h_f[i].a[1],
+                                  ns->h_f[i].a[2]);
+    // |j_{1,i}|
+    double abs_j1 = get_magnitude(ns->h_f[i].a1[0],
+                                  ns->h_f[i].a1[1],
+                                  ns->h_f[i].a1[2]);
+    // |j_{1,i}|^{2}
+    double abs_j12  = abs_j1 * abs_j1;
+    // a_{1,i}^{(3)} = a_{0,i}^{(3)} because the 3rd-order interpolation
+    double abs_a1_3 = get_magnitude(ns->h_a3[i].x,
+                                    ns->h_a3[i].y,
+                                    ns->h_a3[i].z);
+    // |a_{1,i}^{(2)}|
+    double abs_a1_2 = get_magnitude(ax1_2, ay1_2, az1_2);
+    // |a_{1,i}^{(2)}|^{2}
+    double abs_a1_22  = abs_a1_2 * abs_a1_2;
+
+    double normal_dt = sqrt(ETA * ((abs_a1 * abs_a1_2 + abs_j12) / (abs_j1 * abs_a1_3 + abs_a1_22)));
+    return normal_dt;
+}
+
+/** Normalization of the timestep.
+ * This method take care of the limits conditions to avoid large jumps between
+ * the timestep distribution
+ */
+double Hermite4GPU::normalize_dt(double new_dt, double old_dt, double t, unsigned int i)
+{
+    if (new_dt <= old_dt/8)
+    {
+        new_dt = D_TIME_MIN;
+    }
+    else if ( old_dt/8 < new_dt && new_dt <= old_dt/4)
+    {
+        new_dt = old_dt / 8;
+    }
+    else if ( old_dt/4 < new_dt && new_dt <= old_dt/2)
+    {
+        new_dt = old_dt / 4;
+    }
+    else if ( old_dt/2 < new_dt && new_dt <= old_dt)
+    {
+        new_dt = old_dt / 2;
+    }
+    else if ( old_dt < new_dt && new_dt <= old_dt * 2)
+    {
+        new_dt = old_dt;
+    }
+    else if (2 * old_dt < new_dt)
+    {
+        double val = t/(2 * old_dt);
+        //float val = t/(2 * old_dt);
+        if(std::ceil(val) == val)
+        {
+            new_dt = 2.0 * old_dt;
+        }
+        else
+        {
+            new_dt = old_dt;
+        }
+    }
+    else
+    {
+        //std::cerr << "this will never happen...I promise" << std::endl;
+        new_dt = old_dt;
+    }
+
+    //if (new_dt <= D_TIME_MIN)
+    if (new_dt < D_TIME_MIN)
+    {
+        new_dt = D_TIME_MIN;
+    }
+    //else if (new_dt >= D_TIME_MAX)
+    else if (new_dt > D_TIME_MAX)
+    {
+        new_dt = D_TIME_MAX;
+    }
+
+    return new_dt;
+}

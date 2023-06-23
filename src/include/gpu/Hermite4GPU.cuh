@@ -141,6 +141,11 @@ class Hermite4GPU : public Hermite4 {
 
         double get_energy_gpu();
 
+        // temporarily here
+        double get_magnitude(double x, double y, double z);
+        double get_timestep_normal(unsigned int i, float ETA);
+        double normalize_dt(double new_dt, double old_dt, double t, unsigned int i);
+
 };
 
 /**
