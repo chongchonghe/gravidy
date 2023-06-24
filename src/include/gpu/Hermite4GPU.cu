@@ -219,20 +219,20 @@ void Hermite4GPU::predicted_pos_vel(double ITIME)
 {
     ns->gtime.prediction_ini = omp_get_wtime();
 
-    // for(int g = 0; g < gpus; g++)
-    // {
-    //     CSC(cudaSetDevice(g));
-    //     int shift = g*n_part[g-1];
-    //     size_t ff_size = n_part[g] * sizeof(Forces);
-    //     size_t d4_size = n_part[g] * sizeof(double4);
-    //     size_t d1_size = n_part[g] * sizeof(double);
-    //
-    //     // all already there (make sure they make it there the first time)
-    //     // CSC(cudaMemcpyAsync(ns->d_f[g], ns->h_f + shift, ff_size, cudaMemcpyHostToDevice, 0));
-    //     // CSC(cudaMemcpyAsync(ns->d_r[g], ns->h_r + shift, d4_size, cudaMemcpyHostToDevice, 0));
-    //     // CSC(cudaMemcpyAsync(ns->d_v[g], ns->h_v + shift, d4_size, cudaMemcpyHostToDevice, 0));
-    //     // CSC(cudaMemcpyAsync(ns->d_t[g], ns->h_t + shift, d1_size, cudaMemcpyHostToDevice, 0));
-    // }
+    for(int g = 0; g < gpus; g++)
+    {
+        CSC(cudaSetDevice(g));
+        int shift = g*n_part[g-1];
+        size_t ff_size = n_part[g] * sizeof(Forces);
+        size_t d4_size = n_part[g] * sizeof(double4);
+        size_t d1_size = n_part[g] * sizeof(double);
+
+        // all already there (make sure they make it there the first time)
+        CSC(cudaMemcpyAsync(ns->d_f[g], ns->h_f + shift, ff_size, cudaMemcpyHostToDevice, 0));
+        CSC(cudaMemcpyAsync(ns->d_r[g], ns->h_r + shift, d4_size, cudaMemcpyHostToDevice, 0));
+        CSC(cudaMemcpyAsync(ns->d_v[g], ns->h_v + shift, d4_size, cudaMemcpyHostToDevice, 0));
+        CSC(cudaMemcpyAsync(ns->d_t[g], ns->h_t + shift, d1_size, cudaMemcpyHostToDevice, 0));
+    }
 
     // Executing kernels
     for(int g = 0; g < gpus; g++)
@@ -330,7 +330,7 @@ void Hermite4GPU::init_acc_jrk()
 
         // All this information from the predictors is needed by each device
         CSC(cudaMemcpy(ns->d_p[g], ns->h_p, pp_size, cudaMemcpyHostToDevice));
-        //CSC(cudaMemcpyAsync(ns->d_p[g], ns->h_p, pp_size, cudaMemcpyHostToDevice, 0));
+        // CSC(cudaMemcpyAsync(ns->d_p[g], ns->h_p, pp_size, cudaMemcpyHostToDevice, 0));
     }
 
     // Executing kernels
