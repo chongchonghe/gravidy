@@ -216,7 +216,7 @@ void Hermite4::init_data()
         ns->h_f[i].a1[1] = 0.0;
         ns->h_f[i].a1[2] = 0.0;
 
-        // Getting rid of these because I don't think they need to be persistent and take GPU memory
+        // Should get rid of these because I don't think they need to be persistent and take GPU memory
         ns->h_a2[i] = empty;
         ns->h_a3[i] = empty;
 

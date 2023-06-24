@@ -309,7 +309,7 @@ void Hermite4GPU::correction_pos_vel(double ITIME, unsigned int nact)
         CSC(cudaMemcpyAsync(&ns->h_t[slice], ns->d_t[g], d1_size, cudaMemcpyDeviceToHost, 0));
         CSC(cudaMemcpyAsync(&ns->h_dt[slice], ns->d_dt[g], d1_size, cudaMemcpyDeviceToHost, 0));
         CSC(cudaMemcpyAsync(&ns->h_r[slice], ns->d_r[g], d4_size, cudaMemcpyDeviceToHost, 0));
-        // CSC(cudaMemcpyAsync(&ns->h_v[slice], ns->d_v[g], d4_size, cudaMemcpyDeviceToHost, 0)); // not needed by every iteration
+        CSC(cudaMemcpyAsync(&ns->h_v[slice], ns->d_v[g], d4_size, cudaMemcpyDeviceToHost, 0)); // not needed by every iteration
     }
 
     ns->gtime.correction_end += omp_get_wtime() - ns->gtime.correction_ini;
@@ -525,9 +525,7 @@ void Hermite4GPU::save_old_acc_jrk_gpu(unsigned int nact)
 {
 
   /// Send over the move array and let the GPU pull out that data.
-  char nacts[128];
-  sprintf(nacts, "nact for loop %d", nact);
-  nvtxRangePushA(nacts);
+  nvtxRangePushA("save_old memcpy");
   for(int g = 0; g < gpus; g++)
   {
       if (n_part[g] > 0)
@@ -542,6 +540,7 @@ void Hermite4GPU::save_old_acc_jrk_gpu(unsigned int nact)
   }
   nvtxRangePop();
 
+  nvtxRangePushA("save_old k launch");
   // Executing kernels
   for(int g = 0; g < gpus; g++)
   {
@@ -556,6 +555,7 @@ void Hermite4GPU::save_old_acc_jrk_gpu(unsigned int nact)
                                                     nact);
       get_kernel_error();
   }
+  nvtxRangePop();
   // No memory copying necessary in either direction
 }
 
@@ -571,11 +571,23 @@ void Hermite4GPU::initial_data_transfer()
       int shift = g*n_part[g-1];
       size_t d1_size = n_part[g] * sizeof(double);
       size_t d4_size = n_part[g] * sizeof(double4);
+      size_t d3_size = n_part[g] * sizeof(double3);
+      size_t ff_size = n_part[g] * sizeof(Forces);
+      size_t pp_size = n_part[g] * sizeof(Predictor);
+      size_t i1_size = n_part[g] * sizeof(unsigned int);
 
       CSC(cudaMemcpyAsync(ns->d_t[g], ns->h_t + shift, d1_size, cudaMemcpyHostToDevice, 0));
       CSC(cudaMemcpyAsync(ns->d_dt[g], ns->h_dt + shift, d1_size, cudaMemcpyHostToDevice, 0));
       CSC(cudaMemcpyAsync(ns->d_r[g], ns->h_r + shift, d4_size, cudaMemcpyHostToDevice, 0));
       CSC(cudaMemcpyAsync(ns->d_v[g], ns->h_v + shift, d4_size, cudaMemcpyHostToDevice, 0));
+      CSC(cudaMemcpyAsync(ns->d_f[g], ns->h_f + shift, ff_size, cudaMemcpyHostToDevice, 0));
+      CSC(cudaMemcpyAsync(ns->d_old[g], ns->h_old + shift, ff_size, cudaMemcpyHostToDevice, 0));
+      CSC(cudaMemcpyAsync(ns->d_p[g], ns->h_p + shift, pp_size, cudaMemcpyHostToDevice, 0));
+      CSC(cudaMemcpyAsync(ns->d_a2[g], ns->h_a2 + shift, d3_size, cudaMemcpyHostToDevice, 0));
+      CSC(cudaMemcpyAsync(ns->d_a3[g], ns->h_a3 + shift, d3_size, cudaMemcpyHostToDevice, 0));
+      CSC(cudaMemcpyAsync(ns->d_move[g], ns->h_move + shift, i1_size, cudaMemcpyHostToDevice, 0));
+
+
   }
 }
 
@@ -589,8 +601,12 @@ void Hermite4GPU::snapshot_data_transfer()
       CSC(cudaSetDevice(g));
       size_t slice = g*n_part[g-1];
       size_t ff_size = n_part[g] * sizeof(Forces);
+      size_t d4_size = n_part[g] * sizeof(Forces);
+      // size_t ff_size = n_part[g] * sizeof(Forces);
 
       CSC(cudaMemcpyAsync(&ns->h_f[slice], ns->d_f[g], ff_size, cudaMemcpyDeviceToHost, 0)); // only needed on writeout
+      CSC(cudaMemcpyAsync(&ns->h_r[slice], ns->d_r[g], d4_size, cudaMemcpyDeviceToHost, 0)); // only needed on writeout
+      CSC(cudaMemcpyAsync(&ns->h_v[slice], ns->d_v[g], d4_size, cudaMemcpyDeviceToHost, 0)); // only needed on writeout
   }
 
 }
