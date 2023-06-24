@@ -536,7 +536,8 @@ void Hermite4GPU::save_old_acc_jrk_gpu(unsigned int nact)
           // Copy to the GPU (d_i) the preddictor host array (h_i)
           size_t chunk = nact * sizeof(unsigned int);
           // CSC(cudaMemcpyAsync(ns->d_i[g], ns->h_i, chunk, cudaMemcpyHostToDevice, 0));
-          CSC(cudaMemcpyAsync(ns->d_move[g], ns->h_move, chunk, cudaMemcpyHostToDevice, 0));
+          // CSC(cudaMemcpyAsync(ns->d_move[g], ns->h_move, chunk, cudaMemcpyHostToDevice, 0));
+          CSC(cudaMemcpy(ns->d_move[g], ns->h_move, chunk, cudaMemcpyHostToDevice));
       }
   }
   nvtxRangePop();
