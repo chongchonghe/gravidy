@@ -601,7 +601,7 @@ void Hermite4GPU::snapshot_data_transfer()
       CSC(cudaSetDevice(g));
       size_t slice = g*n_part[g-1];
       size_t ff_size = n_part[g] * sizeof(Forces);
-      size_t d4_size = n_part[g] * sizeof(Forces);
+      size_t d4_size = n_part[g] * sizeof(double4);
       // size_t ff_size = n_part[g] * sizeof(Forces);
 
       CSC(cudaMemcpyAsync(&ns->h_f[slice], ns->d_f[g], ff_size, cudaMemcpyDeviceToHost, 0)); // only needed on writeout
