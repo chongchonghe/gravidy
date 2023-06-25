@@ -201,54 +201,100 @@ __global__ void k_update(unsigned int *move,
     Can probably test for this.
     **/
 
-        // this used to be inside the first loop below
-        __shared__ Predictor jpshare[BSIZE]; // moved this outside the loop because it doesn't need to be reinitialized
+    // // The entire block will follow the same logic
+    // if () {
+    //   // this
+    // } else {
+    //   // somethign else
+    // }
+    k_update_fullblock(ip, p, fo, jstart, jend, tid, e2);
 
-        for(int j=jstart; j<jend; j+=BSIZE)
-        // This outer loop is just for refilling shared memory with the next
-        // BSIZE block's worth of particles
-        {
-            __syncthreads(); // sync from the reading in the previous loop
-            jpshare[tid] = p[j + tid]; // simpler version of the below that doesn't use tricks to avoid memory access rules
-            __syncthreads(); // sync after writing and before reading
-            // Predictor *src = (Predictor *)&p[j];
-            // Predictor *dst = (Predictor *)jpshare;
-            // dst[      tid] = src[      tid];
-            // dst[BSIZE+tid] = src[BSIZE+tid]; // unsure what this does, seems like it would access memory outside the array?
-            /**
-            I commented out the line above (the one with the index BSIZE+tid) and the code ran and produced the same results.
-            I cannot tell what that line was for.
-            My best guess is that the shared memory being redeclared in the loop means that it will get
-            put on the stack (?) or wherever right after the previous predictor array,
-            so you could prefill the next iteration's jpshare. I can only see this being
-            useful if you're going to skip the last iteration or something.
-            The use of src and dst as pointers means that illegal memory access is harder to track I think...
-            **/
-
-            // If the total amount of particles is not a multiple of BSIZE
-            if(jend-j < BSIZE)
-            {
-                #pragma unroll 4
-                for(int jj=0; jj<jend-j; jj++)
-                {
-                    Predictor jp = jpshare[jj];
-                    k_force_calculation(ip, jp, fo, e2);
-                }
-            }
-            else
-            {
-                #pragma unroll 4
-                for(int jj=0; jj<BSIZE; jj++)
-                {
-                    Predictor jp = jpshare[jj];
-                    k_force_calculation(ip, jp, fo, e2); // adds to fo, not replace
-                }
-            }
-        }
-        // fo is already the sum of the jstart-jend chunk of partner particles' forces, so only NJBLOCK fo's per "move" particle
-        // Leave the fout array as it was
-        fout[iaddr*NJBLOCK + jbid] = fo;
+    // fo is already the sum of the jstart-jend chunk of partner particles' forces, so only NJBLOCK fo's per "move" particle
+    // Leave the fout array as it was
+    fout[iaddr*NJBLOCK + jbid] = fo;
 }
+
+
+/** k_update when acting on a full block (nact remaining >= BSIZE)
+In this case, no threads are going to waste, so we can stick with the way they wrote it originally
+**/
+__device__ void k_update_fullblock(const Predictor &ip,
+                                   Predictor *p,
+                                   Forces &fo,
+                                   const int &jstart,
+                                   const int &jend,
+                                   const int &tid,
+                                   const double &e2)
+{
+  // this used to be inside the first loop below
+  __shared__ Predictor jpshare[BSIZE]; // moved this outside the loop because it doesn't need to be reinitialized
+
+  // This outer loop is just for refilling shared memory with the next
+  // BSIZE block's worth of particles
+  for(int j=jstart; j<jend; j+=BSIZE)
+  {
+    __syncthreads(); // sync from the reading in the previous loop
+    jpshare[tid] = p[j + tid]; // simpler version of the below that doesn't use tricks to avoid memory access rules
+    __syncthreads(); // sync after writing and before reading
+    // Predictor *src = (Predictor *)&p[j];
+    // Predictor *dst = (Predictor *)jpshare;
+    // dst[      tid] = src[      tid];
+    // dst[BSIZE+tid] = src[BSIZE+tid]; // unsure what this does, seems like it would access memory outside the array?
+    /**
+    I commented out the line above (the one with the index BSIZE+tid) and the code ran and produced the same results.
+    I cannot tell what that line was for.
+    My best guess is that the shared memory being redeclared in the loop means that it will get
+    put on the stack (?) or wherever right after the previous predictor array,
+    so you could prefill the next iteration's jpshare. I can only see this being
+    useful if you're going to skip the last iteration or something.
+    The use of src and dst as pointers means that illegal memory access is harder to track I think...
+    **/
+
+    // If the total amount of particles is not a multiple of BSIZE
+    if(jend-j < BSIZE)
+    {
+        #pragma unroll 4
+        for(int jj=0; jj<jend-j; jj++)
+        {
+            Predictor jp = jpshare[jj];
+            k_force_calculation(ip, jp, fo, e2);
+        }
+    }
+    else
+    {
+        #pragma unroll 4
+        for(int jj=0; jj<BSIZE; jj++)
+        {
+            Predictor jp = jpshare[jj];
+            k_force_calculation(ip, jp, fo, e2); // adds to fo, does not overwrite
+        }
+    }
+  }
+}
+
+/** k_update when acting on a partially full block (nact remaining < BSIZE)
+In this case, some threads may go to waste.
+If it's just a few threads going to waste (i.e. nact is like 20+) it's not so bad,
+but in practice there are plenty of k_update calls with nact < 10, which means less
+than half the block (and in some cases almost the entire block, like when nact=2)
+is being used. This is prime real estate for a major speedup.
+
+This function is written to rearrange how the block is filled so that fewer
+threads are unused.
+**/
+__device__ void k_update_partialblock(const Predictor &ip,
+                                      Predictor *jp,
+                                      Forces &fo,
+                                      const int &jstart,
+                                      const int &jend,
+                                      const int &tid,
+                                      const double &e2)
+{
+  // code here
+}
+
+
+
 
 /*
  * @fn k_reduce()
