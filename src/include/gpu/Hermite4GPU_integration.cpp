@@ -103,7 +103,9 @@ void Hermite4GPU::integration()
         predicted_pos_vel(ITIME);
         nvtxRangePop();
 
-        nvtxRangePushA("update_acc_jrk");
+        char nact_str[128];
+        sprintf(nact_str, "update_acc_jrk nact %d", nact);
+        nvtxRangePushA(nact_str);
         update_acc_jrk(nact);
         nvtxRangePop();
 
@@ -114,8 +116,10 @@ void Hermite4GPU::integration()
         // Update the amount of interactions counter
         interactions += nact * ns->n;
 
+        nvtxRangePushA("next_integration_time");
         // Find the next integration time
         next_integration_time(ATIME);
+        nvtxRangePop();
 
 
         if (ITIME >= ns->interval_time * output_factor)
