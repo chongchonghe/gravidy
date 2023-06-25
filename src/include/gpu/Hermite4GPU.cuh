@@ -195,32 +195,6 @@ __global__ void k_update(unsigned int *move,
                          int total,
                          double e2);
 
-
-/** k_update when acting on a full block (nact remaining >= BSIZE)
-In this case, no threads are going to waste, so we can stick with the way they wrote it originally
-**/
-__device__ void k_update_fullblock(const Predictor &ip,
-                                  Predictor *p,
-                                  Forces &fo,
-                                  const int &jstart,
-                                  const int &jend,
-                                  const int &tid,
-                                  const double &e2);
-
-
-/** k_update when acting on a partially full block (nact remaining < BSIZE)
-This function is written to rearrange how the block is filled so that fewer
-threads are unused.
-**/
-__device__ void k_update_partialblock(const Predictor &ip,
-                                      Predictor *jp,
-                                      Forces &fo,
-                                      const int &jstart,
-                                      const int &jend,
-                                      const int &tid,
-                                      const double &e2);
-
-
 /**
  * Force reduction kernel, in charge of summing up all the preliminary results
  * of the forces for the \f$N_{act}\f$ particles.
