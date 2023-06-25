@@ -386,6 +386,56 @@ void Hermite4GPU::update_acc_jrk(unsigned int nact)
             dim3 nblocks(nact_blocks, NJBLOCK, 1);
             dim3 nthreads(BSIZE, 1, 1);
 
+            /**
+            As best I can tell:
+            smem is a size_t argument to instruct the kernel how much shared memory to give each block.
+            Shared memory only works for a single block, so no sense making it larger.
+            Not sure what's up with smem_reduce and +1, haven't gotten that far yet.
+              smem = sizeof(Predictor) * BSIZE;
+              smem_reduce = sizeof(Forces) * NJBLOCK + 1;
+            So the smem is for a Predictor array, one block's worth of Predictors.
+
+            The kernel grid/block setup is
+            nact_blocks is the number of blocks needed for nact, so that one move particle is on each thread.
+            (nact + BSIZE - 1) / BSIZE = 1 + (nact-1)/BSIZE
+            so basically rounded up number of blocks to fit nact on the threads.
+            Block size BSIZE is already set to 32 in common.hpp, and that's good because there are still 32 threads per warp nowadays.
+
+            Then the J dimension (.y in grid/block parlance) is NJBLOCK, which I think is artificially set to 16 but could be set larger depending on how many total blocks (threads) are available.
+            Basically, you have 1 thread per move particle (nact threads) in the x direction, and then 16 particles in the y direction (J).
+            The blocks are basically 32-element long rows arranged mostly side by size (unless nact is short) and then stacked up 16 times, so that no matter the x length, the y length is 16 blocks.
+            y length in threads is also 16, because y length of block is 1 thread, but those 16 y threads are each in a different block and so don't have shared memory.
+
+            Each particle is given 16 threads.
+
+            Diving into the k_update kernel,
+            int ibid = blockIdx.x;
+            int jbid = blockIdx.y;
+            int tid  = threadIdx.x;
+            int iaddr  = tid + blockDim.x * ibid;
+            int jstart = (n * (jbid  )) / NJBLOCK;
+            int jend   = (n * (jbid+1)) / NJBLOCK;
+            so iaddr is the x address and jbid is the y address (since only 1 thread in y per block).
+            iaddr is used to grab the i particle which is "moved" this iteration.
+
+            I need to spend more time thinking about jstart and jend and that for loop.
+            If we divide n into NJBLOCK sections, jstart and jend would delineate the jth section.
+            Like if n were 1600 and NJBLOCK 16, then there's steps of 100, so jstart and jend
+            are 0,100 for j=0, 100,200 for j=1, 1500,1600 for j=15, etc.
+
+            Each iaddr is a "move" particle.
+            Each j block row does a different section of other particles (100-200, etc)
+            Each BSIZE step loop makes shared memory and stores the next BSIZE particles.
+            Then we iterate thru that BSIZE within the BSIZE step loop and each
+            j block row uses the same j particle for that step, hence the shared memory.
+            Every 32 (BSIZE) steps we dump the shared memory and refill it for the next step.
+
+            So that outer BSIZE is only for memory management and the inner one actually runs
+            thru every particle. Each j row will deal with a subet of n and each thread will
+            go thru that n. It all checks out!
+
+            **/
+
             // Kernel to update the forces for the particles in d_i
             k_update <<< nblocks, nthreads, smem >>> (ns->d_move[g],
                                                       ns->d_p[g], // now full predictor array

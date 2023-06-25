@@ -188,13 +188,15 @@ __global__ void k_update(unsigned int *move,
     fo.a1[2] = 0.0;
 
         for(int j=jstart; j<jend; j+=BSIZE)
+        // This outer loop is just for refilling shared memory with the next
+        // BSIZE block's worth of particles
         {
             __shared__ Predictor jpshare[BSIZE];
             __syncthreads();
             Predictor *src = (Predictor *)&j_p[j];
             Predictor *dst = (Predictor *)jpshare;
             dst[      tid] = src[      tid];
-            dst[BSIZE+tid] = src[BSIZE+tid];
+            // dst[BSIZE+tid] = src[BSIZE+tid]; // unsure what this does, seems like it would access memory outside the array?
             __syncthreads();
 
             // If the total amount of particles is not a multiple of BSIZE
@@ -213,11 +215,12 @@ __global__ void k_update(unsigned int *move,
                 for(int jj=0; jj<BSIZE; jj++)
                 {
                     Predictor jp = jpshare[jj];
-                    k_force_calculation(ip, jp, fo, e2);
+                    k_force_calculation(ip, jp, fo, e2); // adds to fo, not replace
                 }
             }
         }
-        // Even though we're using the move array in GPU now, leave the fout array as it was
+        // fo is already the sum of the jstart-jend chunk of partner particles' forces, so only NJBLOCK fo's per "move" particle
+        // Leave the fout array as it was
         fout[iaddr*NJBLOCK + jbid] = fo;
 }
 
