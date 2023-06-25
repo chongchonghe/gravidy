@@ -189,8 +189,7 @@ __device__ void k_force_calculation(const Predictor &i_p,
  * This kernel calls the k_prediction kernel.
  */
 __global__ void k_update(unsigned int *move,
-                         Predictor *i_p,
-                         Predictor *j_p,
+                         Predictor *p,
                          Forces *fout,
                          int n,
                          int total,

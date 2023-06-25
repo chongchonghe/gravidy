@@ -438,8 +438,7 @@ void Hermite4GPU::update_acc_jrk(unsigned int nact)
 
             // Kernel to update the forces for the particles in d_i
             k_update <<< nblocks, nthreads, smem >>> (ns->d_move[g],
-                                                      ns->d_p[g], // now full predictor array
-                                                      ns->d_p[g], // also full predictor array (same as above)
+                                                      ns->d_p[g], // now full predictor array; got rid of second predictor arg bc it would be a duplicate now
                                                       ns->d_fout[g],
                                                       n_part[g], // former N
                                                       nact,

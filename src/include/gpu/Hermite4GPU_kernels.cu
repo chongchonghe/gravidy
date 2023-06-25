@@ -163,8 +163,7 @@ __global__ void k_prediction(Forces *f,
  * @brief Gravitational interaction kernel.
  */
 __global__ void k_update(unsigned int *move,
-                         Predictor *i_p, // this is now the ENTIRE predictor array, not subset
-                         Predictor *j_p, // remains the entire predictor array
+                         Predictor *p, // this is now the ENTIRE predictor array, not subset. only predictor argument, removed the second one because it would be a duplicate
                          Forces *fout,
                          int n,
                          int total,
@@ -178,7 +177,7 @@ __global__ void k_update(unsigned int *move,
     int jend   = (n * (jbid+1)) / NJBLOCK;
 
     unsigned int particle_idx = move[iaddr];
-    Predictor ip = i_p[particle_idx];
+    Predictor ip = p[particle_idx];
     Forces fo;
     fo.a[0] = 0.0;
     fo.a[1] = 0.0;
@@ -187,17 +186,44 @@ __global__ void k_update(unsigned int *move,
     fo.a1[1] = 0.0;
     fo.a1[2] = 0.0;
 
+    /**
+    Could write an alternate version of this for nact < BSIZE so that we don't waste
+    threads. This is crucial since we have block stepping implemented and so we have
+    lots of small nact, often less than 32.
+    I'm thinking for nact<32 (or even  64, or maybe less, 24 or something) we devote a whole block
+    to each particle, not a thread. The blocks can be 32 in x and 16 (NJBLOCK) in y.
+    Then each block goes through all n particles BSIZE by BSIZE.
+    The y rows act the same as in this version, doing every 16th major chunk. The x rows
+    just churn each 32 within that n/16 chunk.
+    We lose the shared memory speedup, but the number of accesses should be smaller anyway.
+    I don't know what would outweigh the other; one or two threads not doing any work.
+    or 30 or 31 separate memory accesses that could have been to shared memory.
+    Can probably test for this.
+    **/
+
+        // this used to be inside the first loop below
+        __shared__ Predictor jpshare[BSIZE]; // moved this outside the loop because it doesn't need to be reinitialized
+
         for(int j=jstart; j<jend; j+=BSIZE)
         // This outer loop is just for refilling shared memory with the next
         // BSIZE block's worth of particles
         {
-            __shared__ Predictor jpshare[BSIZE];
-            __syncthreads();
-            Predictor *src = (Predictor *)&j_p[j];
-            Predictor *dst = (Predictor *)jpshare;
-            dst[      tid] = src[      tid];
+            __syncthreads(); // sync from the reading in the previous loop
+            jpshare[tid] = p[j + tid]; // simpler version of the below that doesn't use tricks to avoid memory access rules
+            __syncthreads(); // sync after writing and before reading
+            // Predictor *src = (Predictor *)&p[j];
+            // Predictor *dst = (Predictor *)jpshare;
+            // dst[      tid] = src[      tid];
             // dst[BSIZE+tid] = src[BSIZE+tid]; // unsure what this does, seems like it would access memory outside the array?
-            __syncthreads();
+            /**
+            I commented out the line above (the one with the index BSIZE+tid) and the code ran and produced the same results.
+            I cannot tell what that line was for.
+            My best guess is that the shared memory being redeclared in the loop means that it will get
+            put on the stack (?) or wherever right after the previous predictor array,
+            so you could prefill the next iteration's jpshare. I can only see this being
+            useful if you're going to skip the last iteration or something.
+            The use of src and dst as pointers means that illegal memory access is harder to track I think...
+            **/
 
             // If the total amount of particles is not a multiple of BSIZE
             if(jend-j < BSIZE)
