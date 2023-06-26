@@ -432,24 +432,32 @@ void Hermite4GPU::update_acc_jrk(unsigned int nact)
 
           **/
 
-          // How many blocks can be filled with BSIZE (32) active particles (nact)
-          int nact_full_blocks = nact / BSIZE; // give each active particle a thread and fill blocks. no partial blocks.
-          // What is the largest multiple of BSIZE (32) that is less than or equal to nact
-          int nact_residual_start = nact_full_blocks * BSIZE; // find out at which particle the full blocks end
-          // What is the remainder of nact divided by BSIZE
-          // i.e. how many particles are in the partial block
-          int nact_residual = nact - (nact_residual_start); // how many leftover particles after that (this is < BSIZE)
+          int  nact_blocks;
 
+          if (nact < BSIZE) {
+            // For a number of particles < BSIZE (32), use threads more optimally
+            // There are still a lot of calculations so using threads efficiently can save time.
+            // It is not uncommon for entire calls to update_acc_jrk to have nact < 10
+            nvtxRangePushA("small nact");
+            nact_blocks = nact;
+            dim3 nblocks(nact_blocks, NJBLOCK, 1);
+            dim3 nthreads(BSIZE, 1, 1);
+            size_t smem_smallnact = sizeof(Forces) * BSIZE;
+            k_update_smallnact <<< nblocks, nthreads, smem_smallnact >>> (ns->d_move[g],
+                                                                          ns->d_p[g],
+                                                                          ns->d_fout[g],
+                                                                          n_part[g],
+                                                                          nact,
+                                                                          ns->e2);
+            nvtxRangePop();
 
-          char msg_str[128];
-          sprintf(msg_str, "nact full blocks %d", nact_full_blocks);
-          nvtxRangePushA(msg_str);
-
-          // Do any full blocks, so multiples of BSIZE (32) nact active particles
-          if (nact_full_blocks > 0) {
+          } else {
+            // Use the regular way where each thread x is a particle
+            // Single kernel launch is cheaper even if a few blockIdx.x > 0 blocks are almost empty
             // Blocks, threads and shared memory configuration
-            // int  nact_blocks = 1 + (nact-1)/BSIZE;
-            dim3 nblocks(nact_full_blocks, NJBLOCK, 1);
+            nvtxRangePushA("large nact");
+            nact_blocks = 1 + (nact-1)/BSIZE;
+            dim3 nblocks(nact_blocks, NJBLOCK, 1);
             dim3 nthreads(BSIZE, 1, 1);
 
             // Kernel to update the forces for the particles in d_i
@@ -457,30 +465,12 @@ void Hermite4GPU::update_acc_jrk(unsigned int nact)
                                                       ns->d_p[g], // now full predictor array; got rid of second predictor arg bc it would be a duplicate now
                                                       ns->d_fout[g], // size is ff_size * NJBLOCK
                                                       n_part[g], // former N
-                                                      nact_residual_start, // only go to the end of the full blocks
+                                                      nact,
                                                       ns->e2);
+
+
+            nvtxRangePop();
           }
-          nvtxRangePop();
-
-
-          sprintf(msg_str, "nact remainder %d", nact_residual);
-          nvtxRangePushA(msg_str);
-
-          // Do the remainder, so a number of particles < BSIZE (32), and use threads more optimally
-          // There are still a lot of calculations so using threads efficiently can save time.
-          // It is not uncommon for entire calls to update_acc_jrk to have nact < 10
-          if (nact_residual > 0) {
-            dim3 nblocks(nact_residual, NJBLOCK, 1);
-            dim3 nthreads(BSIZE, 1, 1);
-            size_t smem_smallnact = sizeof(Forces) * BSIZE;
-            k_update_smallnact <<< nblocks, nthreads, smem_smallnact >>> (&ns->d_move[g][nact_residual_start],
-                                                                          ns->d_p[g],
-                                                                          &ns->d_fout[g][nact_residual_start*NJBLOCK],
-                                                                          n_part[g],
-                                                                          nact_residual,
-                                                                          ns->e2);
-          }
-          nvtxRangePop();
 
         }
     }
