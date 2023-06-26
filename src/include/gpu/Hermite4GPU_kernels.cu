@@ -201,54 +201,120 @@ __global__ void k_update(unsigned int *move,
     Can probably test for this.
     **/
 
-        // this used to be inside the first loop below
-        __shared__ Predictor jpshare[BSIZE]; // moved this outside the loop because it doesn't need to be reinitialized
+    // this used to be inside the first loop below
+    __shared__ Predictor jpshare[BSIZE]; // moved this outside the loop because it doesn't need to be reinitialized
 
-        for(int j=jstart; j<jend; j+=BSIZE)
-        // This outer loop is just for refilling shared memory with the next
-        // BSIZE block's worth of particles
+    for(int j=jstart; j<jend; j+=BSIZE)
+    // This outer loop is just for refilling shared memory with the next
+    // BSIZE block's worth of particles
+    {
+        __syncthreads(); // sync from the reading in the previous loop
+        jpshare[tid] = p[j + tid]; // simpler version of the below that doesn't use tricks to avoid memory access rules
+        __syncthreads(); // sync after writing and before reading
+        // Predictor *src = (Predictor *)&p[j];
+        // Predictor *dst = (Predictor *)jpshare;
+        // dst[      tid] = src[      tid];
+        // dst[BSIZE+tid] = src[BSIZE+tid]; // unsure what this does, seems like it would access memory outside the array?
+        /**
+        I commented out the line above (the one with the index BSIZE+tid) and the code ran and produced the same results.
+        I cannot tell what that line was for.
+        My best guess is that the shared memory being redeclared in the loop means that it will get
+        put on the stack (?) or wherever right after the previous predictor array,
+        so you could prefill the next iteration's jpshare. I can only see this being
+        useful if you're going to skip the last iteration or something.
+        The use of src and dst as pointers means that illegal memory access is harder to track I think...
+        **/
+
+        // If the total amount of particles is not a multiple of BSIZE
+        if(jend-j < BSIZE)
         {
-            __syncthreads(); // sync from the reading in the previous loop
-            jpshare[tid] = p[j + tid]; // simpler version of the below that doesn't use tricks to avoid memory access rules
-            __syncthreads(); // sync after writing and before reading
-            // Predictor *src = (Predictor *)&p[j];
-            // Predictor *dst = (Predictor *)jpshare;
-            // dst[      tid] = src[      tid];
-            // dst[BSIZE+tid] = src[BSIZE+tid]; // unsure what this does, seems like it would access memory outside the array?
-            /**
-            I commented out the line above (the one with the index BSIZE+tid) and the code ran and produced the same results.
-            I cannot tell what that line was for.
-            My best guess is that the shared memory being redeclared in the loop means that it will get
-            put on the stack (?) or wherever right after the previous predictor array,
-            so you could prefill the next iteration's jpshare. I can only see this being
-            useful if you're going to skip the last iteration or something.
-            The use of src and dst as pointers means that illegal memory access is harder to track I think...
-            **/
-
-            // If the total amount of particles is not a multiple of BSIZE
-            if(jend-j < BSIZE)
+            #pragma unroll 4
+            for(int jj=0; jj<jend-j; jj++)
             {
-                #pragma unroll 4
-                for(int jj=0; jj<jend-j; jj++)
-                {
-                    Predictor jp = jpshare[jj];
-                    k_force_calculation(ip, jp, fo, e2);
-                }
-            }
-            else
-            {
-                #pragma unroll 4
-                for(int jj=0; jj<BSIZE; jj++)
-                {
-                    Predictor jp = jpshare[jj];
-                    k_force_calculation(ip, jp, fo, e2); // adds to fo, not replace
-                }
+                Predictor jp = jpshare[jj];
+                k_force_calculation(ip, jp, fo, e2);
             }
         }
-        // fo is already the sum of the jstart-jend chunk of partner particles' forces, so only NJBLOCK fo's per "move" particle
-        // Leave the fout array as it was
-        fout[iaddr*NJBLOCK + jbid] = fo;
+        else
+        {
+            #pragma unroll 4
+            for(int jj=0; jj<BSIZE; jj++)
+            {
+                Predictor jp = jpshare[jj];
+                k_force_calculation(ip, jp, fo, e2); // adds to fo, not replace
+            }
+        }
+    }
+    // fo is already the sum of the jstart-jend chunk of partner particles' forces, so only NJBLOCK fo's per "move" particle
+    // Leave the fout array as it was
+    fout[iaddr*NJBLOCK + jbid] = fo;
 }
+
+
+/*
+ * @fn k_update()
+ *
+ * @brief Gravitational interaction kernel.
+ */
+__global__ void k_update_smallnact(unsigned int *move,
+                         Predictor *p, // this is now the ENTIRE predictor array, not subset. only predictor argument, removed the second one because it would be a duplicate
+                         Forces *fout,
+                         int n,
+                         int total,
+                         double e2)
+{
+  /**
+  Assume move and fout point towards the beginning of the array as far as this kernel is concerned
+  Assume total < BSIZE, that is a condition for this function getting called.
+  total < BSIZE << n.
+  This entire block is devoted to one particle, at move[blockIdx.x].
+  All threads churn through partner particles; this block is assigned a chunk
+  of partner particles depending on its blockIdx.y, in the same layout as the
+  regular k_update
+  **/
+  int ibid = blockIdx.x;
+  int jbid = blockIdx.y;
+  int tid  = threadIdx.x;
+  int jstart = (n * (jbid  )) / NJBLOCK;
+  int jend   = (n * (jbid+1)) / NJBLOCK;
+
+  unsigned int particle_idx = move[ibid]; // entire block works on this ip
+  Predictor ip = p[particle_idx];
+  Forces fo;
+  fo.a[0] = 0.0;
+  fo.a[1] = 0.0;
+  fo.a[2] = 0.0;
+  fo.a1[0] = 0.0;
+  fo.a1[1] = 0.0;
+  fo.a1[2] = 0.0;
+
+  // Needs some shared memory
+  // This will carry the result of each thread's summation and will need to be reduced at the end
+  // This is a separate reduction than the final reduction over NJBLOCK, which
+  // occurs in a separate kernel
+  __shared__ Forces sh[BSIZE];
+
+  for (int j=jstart; j<jend; j+=BSIZE) {
+    if (j >= jend) {
+      k_force_calculation(ip, p[j + tid], fo, e2);
+    }
+  }
+  // After the loop, load the result into shared memory
+  sh[tid] = fo;
+  __syncthreads();
+  // reduce each thread to the 0 index, following the k_reduce example below
+  // I know that BSIZE is 32, so I am writing this for that size.
+  if (tid < 16) sh[tid] += sh[tid + 16];
+  if (tid <  8) sh[tid] += sh[tid +  8];
+  if (tid <  4) sh[tid] += sh[tid +  4];
+  if (tid <  2) sh[tid] += sh[tid +  2];
+  if (tid <  1) sh[tid] += sh[tid +  1];
+
+  if (tid == 0) {
+    fout[ibid*NJBLOCK + jbid] = sh[0];
+  }
+}
+
 
 /*
  * @fn k_reduce()

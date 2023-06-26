@@ -195,6 +195,16 @@ __global__ void k_update(unsigned int *move,
                          int total,
                          double e2);
 
+
+__global__ void k_update_smallnact(unsigned int *move,
+                         Predictor *p,
+                         Forces *fout,
+                         int n,
+                         int total,
+                         double e2);
+
+
+
 /**
  * Force reduction kernel, in charge of summing up all the preliminary results
  * of the forces for the \f$N_{act}\f$ particles.
