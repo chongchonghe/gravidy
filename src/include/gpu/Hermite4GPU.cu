@@ -434,7 +434,8 @@ void Hermite4GPU::update_acc_jrk(unsigned int nact)
 
           int  nact_blocks;
 
-          if (nact < BSIZE) {
+          // if (nact < BSIZE) { // actual command
+          if (nact > -1) { // dummy condition, only run k_update_smallnact
             // For a number of particles < BSIZE (32), use threads more optimally
             // There are still a lot of calculations so using threads efficiently can save time.
             // It is not uncommon for entire calls to update_acc_jrk to have nact < 10
