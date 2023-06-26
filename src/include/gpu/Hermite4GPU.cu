@@ -440,8 +440,13 @@ void Hermite4GPU::update_acc_jrk(unsigned int nact)
           // i.e. how many particles are in the partial block
           int nact_residual = nact - (nact_residual_start); // how many leftover particles after that (this is < BSIZE)
 
+
+          char msg_str[128];
+          sprintf(msg_str, "nact full blocks %d", nact_full_blocks);
+          nvtxRangePushA(msg_str);
+
           // Do any full blocks, so multiples of BSIZE (32) nact active particles
-          if nact_full_blocks > 0 {
+          if (nact_full_blocks > 0) {
             // Blocks, threads and shared memory configuration
             // int  nact_blocks = 1 + (nact-1)/BSIZE;
             dim3 nblocks(nact_full_blocks, NJBLOCK, 1);
@@ -455,10 +460,16 @@ void Hermite4GPU::update_acc_jrk(unsigned int nact)
                                                       nact_residual_start, // only go to the end of the full blocks
                                                       ns->e2);
           }
+          nvtxRangePop();
+
+
+          sprintf(msg_str, "nact remainder %d", nact_residual);
+          nvtxRangePushA(msg_str);
+
           // Do the remainder, so a number of particles < BSIZE (32), and use threads more optimally
           // There are still a lot of calculations so using threads efficiently can save time.
           // It is not uncommon for entire calls to update_acc_jrk to have nact < 10
-          if nact_residual > 0 {
+          if (nact_residual > 0) {
             dim3 nblocks(nact_residual, NJBLOCK, 1);
             dim3 nthreads(BSIZE, 1, 1);
             size_t smem_smallnact = sizeof(Forces) * BSIZE;
@@ -469,6 +480,8 @@ void Hermite4GPU::update_acc_jrk(unsigned int nact)
                                                                           nact_residual,
                                                                           ns->e2);
           }
+          nvtxRangePop();
+          
         }
     }
 
