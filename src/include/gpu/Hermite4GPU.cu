@@ -434,8 +434,8 @@ void Hermite4GPU::update_acc_jrk(unsigned int nact)
 
           int  nact_blocks;
 
-          if (nact < BSIZE) { // actual command
-          // if (nact > 0) { // dummy condition, only run k_update_smallnact
+          // if (nact < BSIZE) { // actual command
+          if (nact > 0) { // dummy condition, only run k_update_smallnact
             // For a number of particles < BSIZE (32), use threads more optimally
             // There are still a lot of calculations so using threads efficiently can save time.
             // It is not uncommon for entire calls to update_acc_jrk to have nact < 10
@@ -444,13 +444,13 @@ void Hermite4GPU::update_acc_jrk(unsigned int nact)
             dim3 nblocks(nact_blocks, NJBLOCK, 1);
             dim3 nthreads(BSIZE, 1, 1);
             size_t smem_smallnact = sizeof(Forces) * BSIZE;
-            // k_update_smallnact <<< nblocks, nthreads, smem_smallnact >>> (ns->d_move[g],
+            // k_update_smallnact <<< nblocks, nthreads, smem_smallnact >>> (ns->d_move[g],  // we don't need/use the dynamically allocated shared memory
             k_update_smallnact <<< nblocks, nthreads >>> (ns->d_move[g],
-                                                                          ns->d_p[g],
-                                                                          ns->d_fout[g],
-                                                                          n_part[g],
-                                                                          nact,
-                                                                          ns->e2);
+                                                          ns->d_p[g],
+                                                          ns->d_fout[g],
+                                                          n_part[g],
+                                                          nact,
+                                                          ns->e2);
             nvtxRangePop();
 
           } else {
@@ -463,13 +463,13 @@ void Hermite4GPU::update_acc_jrk(unsigned int nact)
             dim3 nthreads(BSIZE, 1, 1);
 
             // Kernel to update the forces for the particles in d_i
-            // k_update <<< nblocks, nthreads, smem >>> (ns->d_move[g],
+            // k_update <<< nblocks, nthreads, smem >>> (ns->d_move[g], // we don't need/use the dynamically allocated shared memory
             k_update <<< nblocks, nthreads >>> (ns->d_move[g],
-                                                      ns->d_p[g], // now full predictor array; got rid of second predictor arg bc it would be a duplicate now
-                                                      ns->d_fout[g], // size is ff_size * NJBLOCK
-                                                      n_part[g], // former N
-                                                      nact,
-                                                      ns->e2);
+                                                ns->d_p[g], // now full predictor array; got rid of second predictor arg bc it would be a duplicate now
+                                                ns->d_fout[g], // size is ff_size * NJBLOCK
+                                                n_part[g], // former N
+                                                nact,
+                                                ns->e2);
 
 
             nvtxRangePop();
