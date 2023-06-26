@@ -295,7 +295,7 @@ __global__ void k_update_smallnact(unsigned int *move,
   __shared__ Forces sh[BSIZE];
 
   for (int j=jstart; j<jend; j+=BSIZE) {
-    if (j >= jend) {
+    if (j < jend) {
       k_force_calculation(ip, p[j + tid], fo, e2);
     }
   }

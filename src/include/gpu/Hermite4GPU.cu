@@ -446,11 +446,10 @@ void Hermite4GPU::update_acc_jrk(unsigned int nact)
           nvtxRangePushA(msg_str);
 
           // Do any full blocks, so multiples of BSIZE (32) nact active particles
-          if (nact_full_blocks > -1) {
+          if (nact_full_blocks > 0) {
             // Blocks, threads and shared memory configuration
-            int  nact_blocks = 1 + (nact-1)/BSIZE;
-            // dim3 nblocks(nact_full_blocks, NJBLOCK, 1);
-            dim3 nblocks(nact_blocks, NJBLOCK, 1);
+            // int  nact_blocks = 1 + (nact-1)/BSIZE;
+            dim3 nblocks(nact_full_blocks, NJBLOCK, 1);
             dim3 nthreads(BSIZE, 1, 1);
 
             // Kernel to update the forces for the particles in d_i
@@ -458,7 +457,7 @@ void Hermite4GPU::update_acc_jrk(unsigned int nact)
                                                       ns->d_p[g], // now full predictor array; got rid of second predictor arg bc it would be a duplicate now
                                                       ns->d_fout[g], // size is ff_size * NJBLOCK
                                                       n_part[g], // former N
-                                                      nact, // only go to the end of the full blocks
+                                                      nact_residual_start, // only go to the end of the full blocks
                                                       ns->e2);
           }
           nvtxRangePop();
@@ -470,7 +469,7 @@ void Hermite4GPU::update_acc_jrk(unsigned int nact)
           // Do the remainder, so a number of particles < BSIZE (32), and use threads more optimally
           // There are still a lot of calculations so using threads efficiently can save time.
           // It is not uncommon for entire calls to update_acc_jrk to have nact < 10
-          if (nact_residual < 0) {
+          if (nact_residual > 0) {
             dim3 nblocks(nact_residual, NJBLOCK, 1);
             dim3 nthreads(BSIZE, 1, 1);
             size_t smem_smallnact = sizeof(Forces) * BSIZE;
