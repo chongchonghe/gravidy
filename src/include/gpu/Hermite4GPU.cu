@@ -439,7 +439,7 @@ void Hermite4GPU::update_acc_jrk(unsigned int nact)
             // For a number of particles < BSIZE (32), use threads more optimally
             // There are still a lot of calculations so using threads efficiently can save time.
             // It is not uncommon for entire calls to update_acc_jrk to have nact < 10
-            nvtxRangePushA("block per particle (new method)");
+            nvtxRangePushA("small nact");
             nact_blocks = nact;
             dim3 nblocks(nact_blocks, NJBLOCK, 1);
             dim3 nthreads(BSIZE, 1, 1);
@@ -456,7 +456,7 @@ void Hermite4GPU::update_acc_jrk(unsigned int nact)
             // Use the regular way where each thread x is a particle
             // Single kernel launch is cheaper even if a few blockIdx.x > 0 blocks are almost empty
             // Blocks, threads and shared memory configuration
-            nvtxRangePushA("thread per particle (original method)");
+            nvtxRangePushA("large nact");
             nact_blocks = 1 + (nact-1)/BSIZE;
             dim3 nblocks(nact_blocks, NJBLOCK, 1);
             dim3 nthreads(BSIZE, 1, 1);
