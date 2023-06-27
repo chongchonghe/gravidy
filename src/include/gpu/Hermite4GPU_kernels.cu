@@ -694,7 +694,7 @@ __global__ void k_find_particles_to_move(unsigned int *move,
     istart = array_index_info[i*2]; // index into move_staging
     iend = array_index_info[i*2 + 1]; // index into move_staging
     // Use the sum of previous threads' nacts to find offset into move array
-    running_total_previous_nact = (i > 0) ? running_total_previous_nact + n_partial[i-1] : 0; // starting index into move
+    running_total_previous_nact = (i > 0) ? running_total_previous_nact + nact_partial[i-1] : 0; // starting index into move
     for (unsigned int ii = istart; ii < iend; ii+=BSIZE) {
       // Move data block by block from move_staging into move
       if (ii < iend) {
@@ -728,7 +728,7 @@ __global__ void k_find_particles_to_move(unsigned int *move,
   if (threadIdx.x == 0) {
     // nact_result and max_mass_result are pointers to single-element memory
     // These are my return values, but kernels can't return like functions (afaik), so we do this
-    nact_result[0] = running_total_previous_nact + n_partial[BSIZE-1];
+    nact_result[0] = running_total_previous_nact + nact_partial[BSIZE-1];
     max_mass_result[0] = max_mass_arr[0]; // result of reduction
   }
   // Done!
