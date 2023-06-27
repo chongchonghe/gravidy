@@ -151,6 +151,10 @@ void Hermite4GPU::alloc_arrays_device()
         CSC(cudaMalloc((void**)&ns->d_fout[g], ff_size * NJBLOCK));
         CSC(cudaMalloc((void**)&ns->d_fout_tmp[g], ff_size * NJBLOCK));
 
+        CSC(cudaMalloc((void**)&ns->d_nact[g], sizeof(unsigned int))); // single uint
+        CSC(cudaMalloc((void**)&ns->d_max_mass[g], sizeof(float))); // single float
+        CSC(cudaMalloc((void**)&ns->d_min_time[g], sizeof(double))); // single float
+
         CSC(cudaMemset(ns->d_r[g], 0, d4_size));
         CSC(cudaMemset(ns->d_v[g], 0, d4_size));
         CSC(cudaMemset(ns->d_f[g], 0, ff_size));
@@ -168,6 +172,10 @@ void Hermite4GPU::alloc_arrays_device()
         CSC(cudaMemset(ns->d_move[g], 0, i1_size));
         CSC(cudaMemset(ns->d_fout[g], 0, ff_size * NJBLOCK));
         CSC(cudaMemset(ns->d_fout_tmp[g], 0, ff_size * NJBLOCK));
+
+        CSC(cudaMemset(ns->d_nact[g], 0, sizeof(unsigned int)));
+        CSC(cudaMemset(ns->d_max_mass[g], 0, sizeof(float)));
+        CSC(cudaMemset(ns->d_min_time[g], 0, sizeof(double)));
 
         ns->h_fout_gpu[g] = new Forces[ns->n*NJBLOCK];
     }
@@ -203,6 +211,11 @@ void Hermite4GPU::free_arrays_device()
         CSC(cudaFree(ns->d_move[g]));
         CSC(cudaFree(ns->d_fout[g]));
         CSC(cudaFree(ns->d_fout_tmp[g]));
+
+        CSC(cudaFree(ns->d_nact[g]));
+        CSC(cudaFree(ns->d_max_mass[g]));
+        CSC(cudaFree(ns->d_min_time[g]));
+
         delete ns->h_fout_gpu[g];
     }
 
@@ -443,7 +456,7 @@ void Hermite4GPU::update_acc_jrk(unsigned int nact)
             nact_blocks = nact;
             dim3 nblocks(nact_blocks, NJBLOCK, 1);
             dim3 nthreads(BSIZE, 1, 1);
-            size_t smem_smallnact = sizeof(Forces) * BSIZE;
+            // size_t smem_smallnact = sizeof(Forces) * BSIZE;
             // k_update_smallnact <<< nblocks, nthreads, smem_smallnact >>> (ns->d_move[g],  // we don't need/use the dynamically allocated shared memory
             k_update_smallnact <<< nblocks, nthreads >>> (ns->d_move[g],
                                                           ns->d_p[g],
@@ -639,6 +652,40 @@ void Hermite4GPU::save_old_acc_jrk_gpu(unsigned int nact)
   nvtxRangePop();
   // No memory copying necessary in either direction
 }
+
+/** Method in charge of finding all the particles that need to be
+ * updated on the following integration step.
+ */
+unsigned int Hermite4GPU::find_particles_to_move_gpu(double ITIME)
+{
+  // Pass a whole bunch of things into the kernel launch.
+  // Launch on 1 block with BSIZE (32) threads
+  // Skip the gpu loop, this is designed for 1 gpu
+  int g = 0;
+  nthreads = BSIZE;
+  nblocks = 1;
+  size_t smem_find = ns->n * sizeof(unsigned int);
+  CSC(cudaSetDevice(g));
+  k_find_particles_to_move <<< nblocks, nthreads, smem_find >>> (ns->d_move[g],
+                                                                 ns->d_r[g],
+                                                                 ns->d_t[g],
+                                                                 ns->d_dt[g],
+                                                                 ITIME,
+                                                                 ns->n,
+                                                                 ns->max_mass,
+                                                                 ns->d_nact[g],
+                                                                 ns->d_max_mass[g]);
+
+  unsigned int nact_result;
+
+  CSC(cudaMemcpyAsync(&nact_result, ns->d_nact[g], sizeof(unsigned int), cudaMemcpyDeviceToHost, 0));
+  CSC(cudaMemcpyAsync(&ns->max_mass, ns->d_max_mass[g], sizeof(float), cudaMemcpyDeviceToHost, 0));
+
+  return nact_result;
+
+}
+
+
 
 /**
 We have to transfer some data into the GPU once, at the beginning of the simulation.

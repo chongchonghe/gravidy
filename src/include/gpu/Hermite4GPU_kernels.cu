@@ -612,3 +612,124 @@ __global__ void k_save_old_acc_jrk(unsigned int *move,
       fout[i] = fin[i];
   }
 }
+
+/** Method in charge of finding all the particles that need to be
+ * updated on the following integration step.
+ * Since we are using DP, we base the comparison between times and
+ * timesteps using the machine epsilon, to avoid overflows.
+
+ This function is really simple in serial but contains a comparison and a list build,
+ so in parallel there is a lot of stuff to worry about.
+ *
+ */
+__global__ void k_find_particles_to_move(unsigned int *move,
+                                         double4 *r,
+                                         double *t,
+                                         double *dt,
+                                         double ITIME,
+                                         unsigned int n, // total number of particles
+                                         float max_mass, // ns->max_mass
+                                         unsigned int *nact_result, // single element of space
+                                         float *max_mass_result) // single element of space
+{
+  // This only runs on one block because of the scan-like element to it.
+  // Each thread iterates through n/BSIZE particles.
+  // At the end of the work loop, the result arrays are collected in the move array.
+  // A dynamically allocated shared memory is used as a staging ground for the move particle ids
+
+  // Dynamically allocated shared memory of size n * sizeof(int)
+  extern __shared__ unsigned int move_staging[];
+
+  __shared__ unsigned int array_index_info[BSIZE*2]; // Holds the start and end index of this thread's piece of move_staging
+  __shared__ float max_mass_arr[BSIZE]; // stage the thread max masses for reduction
+  __shared__ unsigned int nact_partial[BSIZE]; // For sum reduction
+
+  // Only called in 1 block so thread index is same as total index
+  unsigned int istart = ( threadIdx.x      * n) / BSIZE;
+  unsigned int iend   = ((threadIdx.x + 1) * n) / BSIZE;
+
+  array_index_info[threadIdx.x*2] = istart; // starting index of this thread's chunk of memory
+
+  double4 rr;
+  double tmp_time;
+  float thread_max_mass = max_mass;
+
+  unsigned int j = istart; // index into move_staging, which holds only active particles. minus threadIdx.x, becomes part of nact
+
+  // Loop through this thread's chunk, between nstart and nend
+  for (unsigned int i = istart; i < iend; i++) {
+    // The CPU code initializes h_move with -1s, I believe to raise a memory access error if we try to use a non-active particle.
+    // I am going to skip this because casting like that is sort of hacky.
+    // move_staging[i] = -1; // when casted to unsigned, becomes huge and will cause memory access error if used. good way to indicate we shouldn't be moving that particle.
+    rr = r[i];
+    if (rr.w > thread_max_mass) {
+      thread_max_mass = rr.w
+    }
+
+    tmp_time = t[i] + dt[i];
+    if (std::fabs(ITIME - tmp_time) < 2*std::numeric_limits<double>::epsilon()) {
+      // i.e. if itime = tmp_time = t + dt (but accounting for numerical error)
+      move_staging[j] = i;
+      j++;
+    }
+  }
+  // Save the end index. Number of particles moved is start index - end index
+  array_index_info[threadIdx.x*2 + 1] = j;
+  nact_partial[threadIdx.x] = j - istart; // number of active particles pulled by this thread
+  max_mass_arr[threadIdx.x] = thread_max_mass;
+  __syncthreads();
+
+  // Move particles have been identified, indices put in move_staging,
+  // but each thread's array is separated.
+  // move_staging might look like: [ 2 4 5 6 0 0 0 0 0 23 28 29 0 0 0 0 0 34 37 0 0 0 0 ] (simplified for demonstration)
+  // and we need to collapse it so all the null values (zeros in this demonstration) are at the end
+
+  // running_total_previous_nact is the sum of nact_partial[0:i-1]
+  unsigned int running_total_previous_nact; // for indexing into move
+
+  // Loop through each thread's work. Let all threads help move.
+  // It's like if 32 people have to move out of each of their houses, so all 32 help each of their friends, one by one, move
+  for (unsigned int i = 0; i < BSIZE; i++) {
+    // Now loop through that thread's start and end, which we get from the shared memory
+    istart = array_index_info[i*2]; // index into move_staging
+    iend = array_index_info[i*2 + 1]; // index into move_staging
+    // Use the sum of previous threads' nacts to find offset into move array
+    running_total_previous_nact = (i > 0) ? running_total_previous_nact + n_partial[i-1] : 0; // starting index into move
+    for (unsigned int ii = istart; ii < iend; ii+=BSIZE) {
+      // Move data block by block from move_staging into move
+      if (ii < iend) {
+        move[running_total_previous_nact + (ii - istart)] = move_staging[ii];
+      }
+    }
+  }
+  __syncthreads();
+  // Move is all assembled!
+  // Reduce the max mass; follow k_reduce example
+  // I know that BSIZE is 32, so I write this for that size.
+  if ((threadIdx.x < 16) && (max_mass_arr[threadIdx.x + 16] > max_mass_arr[threadIdx.x]))
+      max_mass_arr[threadIdx.x] = max_mass_arr[threadIdx.x + 16];
+  __syncthreads(); // spamming syncthreads because I'm worried about the nested logic. negligible impact on total runtime
+  if ((threadIdx.x <  8) && (max_mass_arr[threadIdx.x +  8] > max_mass_arr[threadIdx.x]))
+      max_mass_arr[threadIdx.x] = max_mass_arr[threadIdx.x +  8];
+  __syncthreads(); // it might not be necessary but idk
+  if ((threadIdx.x <  4) && (max_mass_arr[threadIdx.x +  4] > max_mass_arr[threadIdx.x]))
+      max_mass_arr[threadIdx.x] = max_mass_arr[threadIdx.x +  4];
+  __syncthreads();
+  if ((threadIdx.x <  2) && (max_mass_arr[threadIdx.x +  2] > max_mass_arr[threadIdx.x]))
+      max_mass_arr[threadIdx.x] = max_mass_arr[threadIdx.x +  2];
+  __syncthreads();
+  if ((threadIdx.x <  1) && (max_mass_arr[threadIdx.x +  1] > max_mass_arr[threadIdx.x]))
+      max_mass_arr[threadIdx.x] = max_mass_arr[threadIdx.x +  1];
+  __syncthreads();
+
+
+  // Need to finish summing nact (only last element to go)
+  // The rest of this is serial
+  if (threadIdx.x == 0) {
+    // nact_result and max_mass_result are pointers to single-element memory
+    // These are my return values, but kernels can't return like functions (afaik), so we do this
+    nact_result[0] = running_total_previous_nact + n_partial[BSIZE-1];
+    max_mass_result[0] = max_mass_arr[0]; // result of reduction
+  }
+  // Done!
+}

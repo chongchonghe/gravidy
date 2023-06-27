@@ -135,6 +135,7 @@ class Hermite4GPU : public Hermite4 {
         void predicted_pos_vel(double ITIME);
         void correction_pos_vel(double ITIME, unsigned int nact);
         void save_old_acc_jrk_gpu(unsigned int nact);
+        unsigned int find_particles_to_move_gpu(double ITIME);
         void initial_data_transfer();
         void snapshot_data_transfer();
         void integration();
@@ -282,6 +283,20 @@ __global__ void k_save_old_acc_jrk(unsigned int *move,
                                   Forces *fin,
                                   Forces *fout,
                                   unsigned int dev_size);
+
+
+/** Method in charge of finding all the particles that need to be
+ * updated on the following integration step.
+ */
+__global__ void k_find_particles_to_move(unsigned int *move,
+                                         double4 *r,
+                                         double *t,
+                                         double *dt,
+                                         double ITIME,
+                                         unsigned int n,
+                                         float max_mass,
+                                         unsigned int *nact_result,
+                                         float *max_mass_result);
 
 
 #endif

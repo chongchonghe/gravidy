@@ -138,6 +138,9 @@ class NbodySystem {
         Forces       *d_old[MAXGPUS];
         double3      *d_a2[MAXGPUS];
         double3      *d_a3[MAXGPUS];
+        unsigned int *d_nact[MAXGPUS]; // store small return value nact
+        float        *d_max_mass[MAXGPUS]; // store small return value max_mass
+        double       *d_min_time[MAXGPUS]; // store small return value next integration time
 
 
         /******************************** General functions of the system */
