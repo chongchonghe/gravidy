@@ -689,7 +689,7 @@ unsigned int Hermite4GPU::find_particles_to_move_gpu(double ITIME)
   nvtxRangePushA(nact_str);
 
   CSC(cudaMemcpy(&nact_result, ns->d_nact[g], sizeof(unsigned int), cudaMemcpyDeviceToHost));
-  CSC(cudaMemcpy(&ns->max_mass, ns->d_max_mass[g], sizeof(float), cudaMemcpyDeviceToHost));
+  // CSC(cudaMemcpy(&ns->max_mass, ns->d_max_mass[g], sizeof(float), cudaMemcpyDeviceToHost));
   CSC(cudaDeviceSynchronize());
   nvtxRangePop();
 

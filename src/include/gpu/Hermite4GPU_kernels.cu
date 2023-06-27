@@ -708,24 +708,24 @@ __global__ void k_find_particles_to_move(unsigned int *move,
     }
   }
   __syncthreads();
-  // Move is all assembled!
-  // Reduce the max mass; follow k_reduce example
-  // I know that BSIZE is 32, so I write this for that size.
-  if ((tid < 16) && (max_mass_arr[tid + 16] > max_mass_arr[tid]))
-      max_mass_arr[tid] = max_mass_arr[tid + 16];
-  __syncthreads(); // spamming syncthreads because I'm worried about the nested logic. negligible impact on total runtime
-  if ((tid <  8) && (max_mass_arr[tid +  8] > max_mass_arr[tid]))
-      max_mass_arr[tid] = max_mass_arr[tid +  8];
-  __syncthreads(); // it might not be necessary but idk
-  if ((tid <  4) && (max_mass_arr[tid +  4] > max_mass_arr[tid]))
-      max_mass_arr[tid] = max_mass_arr[tid +  4];
-  __syncthreads();
-  if ((tid <  2) && (max_mass_arr[tid +  2] > max_mass_arr[tid]))
-      max_mass_arr[tid] = max_mass_arr[tid +  2];
-  __syncthreads();
-  if ((tid <  1) && (max_mass_arr[tid +  1] > max_mass_arr[tid]))
-      max_mass_arr[tid] = max_mass_arr[tid +  1];
-  __syncthreads();
+  // // Move is all assembled!
+  // // Reduce the max mass; follow k_reduce example
+  // // I know that BSIZE is 32, so I write this for that size.
+  // if ((tid < 16) && (max_mass_arr[tid + 16] > max_mass_arr[tid]))
+  //     max_mass_arr[tid] = max_mass_arr[tid + 16];
+  // __syncthreads(); // spamming syncthreads because I'm worried about the nested logic. negligible impact on total runtime
+  // if ((tid <  8) && (max_mass_arr[tid +  8] > max_mass_arr[tid]))
+  //     max_mass_arr[tid] = max_mass_arr[tid +  8];
+  // __syncthreads(); // it might not be necessary but idk
+  // if ((tid <  4) && (max_mass_arr[tid +  4] > max_mass_arr[tid]))
+  //     max_mass_arr[tid] = max_mass_arr[tid +  4];
+  // __syncthreads();
+  // if ((tid <  2) && (max_mass_arr[tid +  2] > max_mass_arr[tid]))
+  //     max_mass_arr[tid] = max_mass_arr[tid +  2];
+  // __syncthreads();
+  // if ((tid <  1) && (max_mass_arr[tid +  1] > max_mass_arr[tid]))
+  //     max_mass_arr[tid] = max_mass_arr[tid +  1];
+  // __syncthreads();
 
 
   // Need to finish summing nact (only last element to go)
