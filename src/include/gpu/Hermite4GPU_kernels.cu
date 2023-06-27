@@ -640,7 +640,16 @@ __global__ void k_find_particles_to_move(unsigned int *move,
   // A dynamically allocated shared memory is used as a staging ground for the move particle ids
 
   // Dynamically allocated shared memory of size n * sizeof(int)
-  extern __shared__ unsigned int move_staging[];
+  // extern __shared__ unsigned int move_staging[];
+
+  // if (tid == 0) {
+  //   // nact_result and max_mass_result are pointers to single-element memory
+  //   // These are my return values, but kernels can't return like functions (afaik), so we do this
+  //   nact_result[0] = 0;
+  //   // max_mass_result[0] = max_mass_arr[0]; // result of reduction
+  // }
+  // return;
+
 
   __shared__ unsigned int array_index_info[BSIZE*2]; // Holds the start and end index of this thread's piece of move_staging
   __shared__ float max_mass_arr[BSIZE]; // stage the thread max masses for reduction
@@ -672,7 +681,7 @@ __global__ void k_find_particles_to_move(unsigned int *move,
     tmp_time = t[i] + dt[i];
     if (std::fabs(ITIME - tmp_time) < dbl_tol) {
       // i.e. if itime = tmp_time = t + dt (but accounting for numerical error)
-      move_staging[j] = i;
+      move[j] = i;
       j++;
     }
   }
@@ -689,23 +698,27 @@ __global__ void k_find_particles_to_move(unsigned int *move,
 
   // running_total_previous_nact is the sum of nact_partial[0:i-1]
   unsigned int running_total_previous_nact = 0; // for indexing into move
+  unsigned int tmp_move_idx;
 
   // Loop through each thread's work. Let all threads help move.
   // It's like if 32 people have to move out of each of their houses, so all 32 help each of their friends, one by one, move
-  for (unsigned int i = 0; i < BSIZE; i++) {
+  for (unsigned int i = 1; i < BSIZE; i++) {
     // Now loop through that thread's start and end, which we get from the shared memory
     istart = array_index_info[i*2]; // index into move_staging
     iend = array_index_info[i*2 + 1]; // index into move_staging
     // Use the sum of previous threads' nacts to find offset into move array
-    if (i > 0) {
-      running_total_previous_nact += nact_partial[i-1]; // starting index into move
-    }
     for (unsigned int ii = istart; ii < iend; ii+=BSIZE) {
       // Move data block by block from move_staging into move
       if ((ii+tid) < iend) {
-        move[running_total_previous_nact + (ii + tid - istart)] = move_staging[ii + tid];
+        tmp_move_idx = move[ii + tid];
       }
+      __syncthreads();
+      if ((ii+tid) < iend) {
+        move[running_total_previous_nact + (ii + tid - istart)] = tmp_move_idx;
+      }
+      __syncthreads();
     }
+    running_total_previous_nact += nact_partial[i]; // starting index into move
   }
   __syncthreads();
   // // Move is all assembled!

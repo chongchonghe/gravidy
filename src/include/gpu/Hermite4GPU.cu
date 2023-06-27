@@ -664,22 +664,22 @@ unsigned int Hermite4GPU::find_particles_to_move_gpu(double ITIME)
   int g = 0;
   nblocks = 1;
   nthreads = BSIZE;
-  size_t smem_find = ns->n * sizeof(unsigned int);
+  // size_t smem_find = ns->n * sizeof(unsigned int);
   CSC(cudaSetDevice(g));
 
   char nact_str[128];
   sprintf(nact_str, "find_ kernel launch n %d size %d", ns->n, smem_find);
   nvtxRangePushA(nact_str);
-  k_find_particles_to_move <<< nblocks, nthreads, smem_find >>> (ns->d_move[g],
-                                                                 ns->d_r[g],
-                                                                 ns->d_t[g],
-                                                                 ns->d_dt[g],
-                                                                 ITIME,
-                                                                 2*std::numeric_limits<double>::epsilon(),
-                                                                 ns->n,
-                                                                 ns->max_mass,
-                                                                 ns->d_nact[g],
-                                                                 ns->d_max_mass[g]);
+  k_find_particles_to_move <<< nblocks, nthreads >>> (ns->d_move[g],
+                                                      ns->d_r[g],
+                                                      ns->d_t[g],
+                                                      ns->d_dt[g],
+                                                      ITIME,
+                                                      2*std::numeric_limits<double>::epsilon(),
+                                                      ns->n,
+                                                      ns->max_mass,
+                                                      ns->d_nact[g],
+                                                      ns->d_max_mass[g]);
 
   get_kernel_error();
   unsigned int nact_result = 11;
