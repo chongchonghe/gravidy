@@ -35,7 +35,7 @@
  */
 #undef _GLIBCXX_ATOMIC_BUILTINS
 #include "Hermite4GPU.cuh"
-#include <cfloat>
+// #include <cfloat>
 
 /*
  * @fn k_init_acc_jr
@@ -628,6 +628,7 @@ __global__ void k_find_particles_to_move(unsigned int *move,
                                          double *t,
                                          double *dt,
                                          double ITIME,
+                                         double dbl_tol,
                                          unsigned int n, // total number of particles
                                          float max_mass, // ns->max_mass
                                          unsigned int *nact_result, // single element of space
@@ -646,10 +647,11 @@ __global__ void k_find_particles_to_move(unsigned int *move,
   __shared__ unsigned int nact_partial[BSIZE]; // For sum reduction
 
   // Only called in 1 block so thread index is same as total index
-  unsigned int istart = ( threadIdx.x      * n) / BSIZE;
-  unsigned int iend   = ((threadIdx.x + 1) * n) / BSIZE;
+  unsigned int tid = threadIdx.x;
+  unsigned int istart = ( tid      * n) / BSIZE;
+  unsigned int iend   = ((tid + 1) * n) / BSIZE;
 
-  array_index_info[threadIdx.x*2] = istart; // starting index of this thread's chunk of memory
+  array_index_info[tid*2] = istart; // starting index of this thread's chunk of memory
 
   double4 rr;
   double tmp_time;
@@ -668,16 +670,16 @@ __global__ void k_find_particles_to_move(unsigned int *move,
     }
 
     tmp_time = t[i] + dt[i];
-    if (std::fabs(ITIME - tmp_time) < 2*DBL_EPSILON) {
+    if (std::fabs(ITIME - tmp_time) < dbl_tol) {
       // i.e. if itime = tmp_time = t + dt (but accounting for numerical error)
       move_staging[j] = i;
       j++;
     }
   }
   // Save the end index. Number of particles moved is start index - end index
-  array_index_info[threadIdx.x*2 + 1] = j;
-  nact_partial[threadIdx.x] = j - istart; // number of active particles pulled by this thread
-  max_mass_arr[threadIdx.x] = thread_max_mass;
+  array_index_info[tid*2 + 1] = j;
+  nact_partial[tid] = j - istart; // number of active particles pulled by this thread
+  max_mass_arr[tid] = thread_max_mass;
   __syncthreads();
 
   // Move particles have been identified, indices put in move_staging,
@@ -686,7 +688,7 @@ __global__ void k_find_particles_to_move(unsigned int *move,
   // and we need to collapse it so all the null values (zeros in this demonstration) are at the end
 
   // running_total_previous_nact is the sum of nact_partial[0:i-1]
-  unsigned int running_total_previous_nact; // for indexing into move
+  unsigned int running_total_previous_nact = 0; // for indexing into move
 
   // Loop through each thread's work. Let all threads help move.
   // It's like if 32 people have to move out of each of their houses, so all 32 help each of their friends, one by one, move
@@ -695,11 +697,13 @@ __global__ void k_find_particles_to_move(unsigned int *move,
     istart = array_index_info[i*2]; // index into move_staging
     iend = array_index_info[i*2 + 1]; // index into move_staging
     // Use the sum of previous threads' nacts to find offset into move array
-    running_total_previous_nact = (i > 0) ? running_total_previous_nact + nact_partial[i-1] : 0; // starting index into move
+    if (i > 0) {
+      running_total_previous_nact += nact_partial[i-1]; // starting index into move
+    }
     for (unsigned int ii = istart; ii < iend; ii+=BSIZE) {
       // Move data block by block from move_staging into move
-      if ((ii+threadIdx.x) < iend) {
-        move[running_total_previous_nact + (ii - istart + threadIdx.x)] = move_staging[ii + threadIdx.x];
+      if ((ii+tid) < iend) {
+        move[running_total_previous_nact + (ii + tid - istart)] = move_staging[ii + tid];
       }
     }
   }
@@ -707,26 +711,26 @@ __global__ void k_find_particles_to_move(unsigned int *move,
   // Move is all assembled!
   // Reduce the max mass; follow k_reduce example
   // I know that BSIZE is 32, so I write this for that size.
-  if ((threadIdx.x < 16) && (max_mass_arr[threadIdx.x + 16] > max_mass_arr[threadIdx.x]))
-      max_mass_arr[threadIdx.x] = max_mass_arr[threadIdx.x + 16];
+  if ((tid < 16) && (max_mass_arr[tid + 16] > max_mass_arr[tid]))
+      max_mass_arr[tid] = max_mass_arr[tid + 16];
   __syncthreads(); // spamming syncthreads because I'm worried about the nested logic. negligible impact on total runtime
-  if ((threadIdx.x <  8) && (max_mass_arr[threadIdx.x +  8] > max_mass_arr[threadIdx.x]))
-      max_mass_arr[threadIdx.x] = max_mass_arr[threadIdx.x +  8];
+  if ((tid <  8) && (max_mass_arr[tid +  8] > max_mass_arr[tid]))
+      max_mass_arr[tid] = max_mass_arr[tid +  8];
   __syncthreads(); // it might not be necessary but idk
-  if ((threadIdx.x <  4) && (max_mass_arr[threadIdx.x +  4] > max_mass_arr[threadIdx.x]))
-      max_mass_arr[threadIdx.x] = max_mass_arr[threadIdx.x +  4];
+  if ((tid <  4) && (max_mass_arr[tid +  4] > max_mass_arr[tid]))
+      max_mass_arr[tid] = max_mass_arr[tid +  4];
   __syncthreads();
-  if ((threadIdx.x <  2) && (max_mass_arr[threadIdx.x +  2] > max_mass_arr[threadIdx.x]))
-      max_mass_arr[threadIdx.x] = max_mass_arr[threadIdx.x +  2];
+  if ((tid <  2) && (max_mass_arr[tid +  2] > max_mass_arr[tid]))
+      max_mass_arr[tid] = max_mass_arr[tid +  2];
   __syncthreads();
-  if ((threadIdx.x <  1) && (max_mass_arr[threadIdx.x +  1] > max_mass_arr[threadIdx.x]))
-      max_mass_arr[threadIdx.x] = max_mass_arr[threadIdx.x +  1];
+  if ((tid <  1) && (max_mass_arr[tid +  1] > max_mass_arr[tid]))
+      max_mass_arr[tid] = max_mass_arr[tid +  1];
   __syncthreads();
 
 
   // Need to finish summing nact (only last element to go)
   // The rest of this is serial
-  if (threadIdx.x == 0) {
+  if (tid == 0) {
     // nact_result and max_mass_result are pointers to single-element memory
     // These are my return values, but kernels can't return like functions (afaik), so we do this
     nact_result[0] = running_total_previous_nact + nact_partial[BSIZE-1];

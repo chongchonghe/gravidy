@@ -671,6 +671,7 @@ unsigned int Hermite4GPU::find_particles_to_move_gpu(double ITIME)
                                                                  ns->d_t[g],
                                                                  ns->d_dt[g],
                                                                  ITIME,
+                                                                 2*std::numeric_limits<double>::epsilon(),
                                                                  ns->n,
                                                                  ns->max_mass,
                                                                  ns->d_nact[g],
