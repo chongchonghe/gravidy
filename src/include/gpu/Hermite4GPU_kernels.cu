@@ -35,7 +35,7 @@
  */
 #undef _GLIBCXX_ATOMIC_BUILTINS
 #include "Hermite4GPU.cuh"
-#include <climits>
+#include <cfloat>
 
 /*
  * @fn k_init_acc_jr
