@@ -664,7 +664,7 @@ __global__ void k_find_particles_to_move(unsigned int *move,
     // move_staging[i] = -1; // when casted to unsigned, becomes huge and will cause memory access error if used. good way to indicate we shouldn't be moving that particle.
     rr = r[i];
     if (rr.w > thread_max_mass) {
-      thread_max_mass = rr.w
+      thread_max_mass = rr.w;
     }
 
     tmp_time = t[i] + dt[i];
