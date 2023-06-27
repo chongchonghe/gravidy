@@ -642,14 +642,6 @@ __global__ void k_find_particles_to_move(unsigned int *move,
   // Dynamically allocated shared memory of size n * sizeof(int)
   // extern __shared__ unsigned int move_staging[];
 
-  // if (tid == 0) {
-  //   // nact_result and max_mass_result are pointers to single-element memory
-  //   // These are my return values, but kernels can't return like functions (afaik), so we do this
-  //   nact_result[0] = 0;
-  //   // max_mass_result[0] = max_mass_arr[0]; // result of reduction
-  // }
-  // return;
-
 
   __shared__ unsigned int array_index_info[BSIZE*2]; // Holds the start and end index of this thread's piece of move_staging
   __shared__ float max_mass_arr[BSIZE]; // stage the thread max masses for reduction
@@ -721,24 +713,24 @@ __global__ void k_find_particles_to_move(unsigned int *move,
     running_total_previous_nact += nact_partial[i]; // starting index into move
   }
   __syncthreads();
-  // // Move is all assembled!
-  // // Reduce the max mass; follow k_reduce example
-  // // I know that BSIZE is 32, so I write this for that size.
-  // if ((tid < 16) && (max_mass_arr[tid + 16] > max_mass_arr[tid]))
-  //     max_mass_arr[tid] = max_mass_arr[tid + 16];
-  // __syncthreads(); // spamming syncthreads because I'm worried about the nested logic. negligible impact on total runtime
-  // if ((tid <  8) && (max_mass_arr[tid +  8] > max_mass_arr[tid]))
-  //     max_mass_arr[tid] = max_mass_arr[tid +  8];
-  // __syncthreads(); // it might not be necessary but idk
-  // if ((tid <  4) && (max_mass_arr[tid +  4] > max_mass_arr[tid]))
-  //     max_mass_arr[tid] = max_mass_arr[tid +  4];
-  // __syncthreads();
-  // if ((tid <  2) && (max_mass_arr[tid +  2] > max_mass_arr[tid]))
-  //     max_mass_arr[tid] = max_mass_arr[tid +  2];
-  // __syncthreads();
-  // if ((tid <  1) && (max_mass_arr[tid +  1] > max_mass_arr[tid]))
-  //     max_mass_arr[tid] = max_mass_arr[tid +  1];
-  // __syncthreads();
+  // Move is all assembled!
+  // Reduce the max mass; follow k_reduce example
+  // I know that BSIZE is 32, so I write this for that size.
+  if ((tid < 16) && (max_mass_arr[tid + 16] > max_mass_arr[tid]))
+      max_mass_arr[tid] = max_mass_arr[tid + 16];
+  __syncthreads(); // spamming syncthreads because I'm worried about the nested logic. negligible impact on total runtime
+  if ((tid <  8) && (max_mass_arr[tid +  8] > max_mass_arr[tid]))
+      max_mass_arr[tid] = max_mass_arr[tid +  8];
+  __syncthreads(); // it might not be necessary but idk
+  if ((tid <  4) && (max_mass_arr[tid +  4] > max_mass_arr[tid]))
+      max_mass_arr[tid] = max_mass_arr[tid +  4];
+  __syncthreads();
+  if ((tid <  2) && (max_mass_arr[tid +  2] > max_mass_arr[tid]))
+      max_mass_arr[tid] = max_mass_arr[tid +  2];
+  __syncthreads();
+  if ((tid <  1) && (max_mass_arr[tid +  1] > max_mass_arr[tid]))
+      max_mass_arr[tid] = max_mass_arr[tid +  1];
+  __syncthreads();
 
 
   // Need to finish summing nact (only last element to go)
