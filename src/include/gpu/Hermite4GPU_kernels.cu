@@ -698,8 +698,8 @@ __global__ void k_find_particles_to_move(unsigned int *move,
     running_total_previous_nact = (i > 0) ? running_total_previous_nact + nact_partial[i-1] : 0; // starting index into move
     for (unsigned int ii = istart; ii < iend; ii+=BSIZE) {
       // Move data block by block from move_staging into move
-      if (ii < iend) {
-        move[running_total_previous_nact + (ii - istart)] = move_staging[ii];
+      if ((ii+threadIdx.x) < iend) {
+        move[running_total_previous_nact + (ii - istart + threadIdx.x)] = move_staging[ii + threadIdx.x];
       }
     }
   }
