@@ -319,9 +319,9 @@ void Hermite4GPU::correction_pos_vel(double ITIME, unsigned int nact)
         size_t d1_size = n_part[g] * sizeof(double);
         size_t d4_size = n_part[g] * sizeof(double4);
 
-        CSC(cudaMemcpyAsync(&ns->h_t[slice], ns->d_t[g], d1_size, cudaMemcpyDeviceToHost, 0));
-        CSC(cudaMemcpyAsync(&ns->h_dt[slice], ns->d_dt[g], d1_size, cudaMemcpyDeviceToHost, 0));
-        CSC(cudaMemcpyAsync(&ns->h_r[slice], ns->d_r[g], d4_size, cudaMemcpyDeviceToHost, 0));
+        CSC(cudaMemcpy(&ns->h_t[slice], ns->d_t[g], d1_size, cudaMemcpyDeviceToHost));
+        CSC(cudaMemcpy(&ns->h_dt[slice], ns->d_dt[g], d1_size, cudaMemcpyDeviceToHost));
+        CSC(cudaMemcpy(&ns->h_r[slice], ns->d_r[g], d4_size, cudaMemcpyDeviceToHost));
         // CSC(cudaMemcpyAsync(&ns->h_v[slice], ns->d_v[g], d4_size, cudaMemcpyDeviceToHost, 0)); // not needed by every iteration
     }
 

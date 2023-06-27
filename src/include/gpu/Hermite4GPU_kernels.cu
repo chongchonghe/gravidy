@@ -746,7 +746,7 @@ __global__ void k_find_particles_to_move(unsigned int *move,
   if (tid == 0) {
     // nact_result and max_mass_result are pointers to single-element memory
     // These are my return values, but kernels can't return like functions (afaik), so we do this
-    nact_result[0] = running_total_previous_nact + nact_partial[BSIZE-1];
+    nact_result[0] = running_total_previous_nact;
     max_mass_result[0] = max_mass_arr[0]; // result of reduction
   }
   // Done!
