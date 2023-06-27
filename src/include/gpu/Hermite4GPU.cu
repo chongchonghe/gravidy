@@ -668,7 +668,7 @@ unsigned int Hermite4GPU::find_particles_to_move_gpu(double ITIME)
   CSC(cudaSetDevice(g));
 
   char nact_str[128];
-  sprintf(nact_str, "find_ kernel launch n %d", ns->n);
+  sprintf(nact_str, "find_ kernel launch n");
   nvtxRangePushA(nact_str);
   k_find_particles_to_move <<< nblocks, nthreads >>> (ns->d_move[g],
                                                       ns->d_r[g],
@@ -682,15 +682,15 @@ unsigned int Hermite4GPU::find_particles_to_move_gpu(double ITIME)
                                                       ns->d_max_mass[g]);
 
   get_kernel_error();
-  unsigned int nact_result = 11;
+  unsigned int nact_result;
   nvtxRangePop();
 
-  sprintf(nact_str, "find_ first copies default nact %d", nact_result);
+  sprintf(nact_str, "find_ first copies default nact");
   nvtxRangePushA(nact_str);
 
   CSC(cudaMemcpy(&nact_result, ns->d_nact[g], sizeof(unsigned int), cudaMemcpyDeviceToHost));
   // CSC(cudaMemcpy(&ns->max_mass, ns->d_max_mass[g], sizeof(float), cudaMemcpyDeviceToHost));
-  CSC(cudaDeviceSynchronize());
+  // CSC(cudaDeviceSynchronize());
   nvtxRangePop();
 
   sprintf(nact_str, "find_ copy move nact %d", nact_result);

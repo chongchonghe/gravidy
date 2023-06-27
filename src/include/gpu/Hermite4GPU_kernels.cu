@@ -697,7 +697,7 @@ __global__ void k_find_particles_to_move(unsigned int *move,
   // and we need to collapse it so all the null values (zeros in this demonstration) are at the end
 
   // running_total_previous_nact is the sum of nact_partial[0:i-1]
-  unsigned int running_total_previous_nact = 0; // for indexing into move
+  unsigned int running_total_previous_nact = nact_partial[0]; // for indexing into move
   unsigned int tmp_move_idx;
 
   // Loop through each thread's work. Let all threads help move.
