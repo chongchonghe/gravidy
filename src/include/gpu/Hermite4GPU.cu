@@ -676,6 +676,7 @@ unsigned int Hermite4GPU::find_particles_to_move_gpu(double ITIME)
                                                                  ns->d_nact[g],
                                                                  ns->d_max_mass[g]);
 
+  get_kernel_error();
   unsigned int nact_result;
 
   CSC(cudaMemcpyAsync(&nact_result, ns->d_nact[g], sizeof(unsigned int), cudaMemcpyDeviceToHost, 0));
