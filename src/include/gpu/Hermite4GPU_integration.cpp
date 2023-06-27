@@ -94,7 +94,7 @@ void Hermite4GPU::integration()
         ITIME = ATIME;
 
         nvtxRangePushA("find_particles_to_move");
-        nact = find_particles_to_move(ITIME);
+        nact = find_particles_to_move_gpu(ITIME);
         nvtxRangePop();
 
         save_old_acc_jrk_gpu(nact);
