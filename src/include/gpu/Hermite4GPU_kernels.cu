@@ -667,7 +667,7 @@ __global__ void k_find_particles_to_move(unsigned int *move,
     }
 
     tmp_time = t[i] + dt[i];
-    if (std::fabs(ITIME - tmp_time) < 2*std::numeric_limits<double>::epsilon()) {
+    if (std::fabs(ITIME - tmp_time) < 2*std::numeric_limits::DBL_EPSILON) {
       // i.e. if itime = tmp_time = t + dt (but accounting for numerical error)
       move_staging[j] = i;
       j++;
