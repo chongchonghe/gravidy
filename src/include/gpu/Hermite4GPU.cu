@@ -668,7 +668,7 @@ unsigned int Hermite4GPU::find_particles_to_move_gpu(double ITIME)
   CSC(cudaSetDevice(g));
 
   char nact_str[128];
-  sprintf(nact_str, "find_ kernel launch nact %d", nact);
+  sprintf(nact_str, "find_ kernel launch n %d size %d", ns->n, smem_find);
   nvtxRangePushA(nact_str);
   k_find_particles_to_move <<< nblocks, nthreads, smem_find >>> (ns->d_move[g],
                                                                  ns->d_r[g],
