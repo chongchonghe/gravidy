@@ -680,6 +680,9 @@ unsigned int Hermite4GPU::find_particles_to_move_gpu(double ITIME)
 
   CSC(cudaMemcpyAsync(&nact_result, ns->d_nact[g], sizeof(unsigned int), cudaMemcpyDeviceToHost, 0));
   CSC(cudaMemcpyAsync(&ns->max_mass, ns->d_max_mass[g], sizeof(float), cudaMemcpyDeviceToHost, 0));
+  cudaDeviceSynchronize();
+  size_t chunk = nact_result * sizeof(unsigned int);
+  CSC(cudaMemcpyAsync(ns->h_move, ns->d_move, chunk, cudaMemcpyDeviceToHost, 0));
 
   return nact_result;
 
