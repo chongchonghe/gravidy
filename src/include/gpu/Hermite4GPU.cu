@@ -107,7 +107,7 @@ Hermite4GPU::Hermite4GPU(NbodySystem *ns, Logger *logger, NbodyUtils *nu)
         logger->log_info(sss);
     }
 
-    save_log2n(); // assign ns->log2n and ns->nblocks_reduce
+    // save_log2n(); // assign ns->log2n and ns->nblocks_reduce
 
     i1_size = ns->n * sizeof(int);
     d1_size = ns->n * sizeof(double);
