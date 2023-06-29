@@ -878,10 +878,10 @@ void Hermite4GPU::force_calculation(const Predictor &pi, const Predictor &pj, Fo
 /** Find log2(n) **/
 void Hermite4GPU::save_log2n()
 {
-  unsigned int n = ns->n;
+  // unsigned int n = ns->n;
   unsigned int s = 0;
-  while (n > 1) {
-    n >>= 1;
+  while (((ns->n)>>s) > 1) {
+    // n >>= 1;
     s++;
   }
   ns->log2n = s;
