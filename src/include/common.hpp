@@ -342,6 +342,8 @@ const double KERNEL_GFLOP = 48e-9; // 60e-9
 #if defined(GPU)
 const int BSIZE   = 32;
 const int NJBLOCK = 16;
+const int BSIZE_LARGE = 512; // for some of the reduce functions; 512 is current max block size by hardware limits
+const int LOG2_BSIZE_LARGE = 9; // 2^9 = 512 // if you change BSIZE_LARGE, you HAVE to change this too
 //#define KERNEL_ERROR_DEBUG 1
 #endif
 

@@ -93,6 +93,10 @@ class NbodySystem {
         // Heaviest star
         double m_g;
 
+        // Helpful numbers
+        unsigned int log2n; // assuming n is power of 2, n = 2^log2n = 1<<log2n
+        unsigned int nblocks_reduce; // Number of blocks if each block reduces 2^10 elements; nblocks_reduce = 2^(log2n - 10)
+
         // Files
         std::string input_filename;
         std::string output_filename;
@@ -140,7 +144,7 @@ class NbodySystem {
         double3      *d_a3[MAXGPUS];
         unsigned int *d_nact[MAXGPUS]; // store small return value nact
         float        *d_max_mass[MAXGPUS]; // store small return value max_mass
-        double       *d_min_time[MAXGPUS]; // store small return value next integration time
+        double       *d_time_tmp[MAXGPUS]; // temporary array for reducing next integration time
 
 
         /******************************** General functions of the system */

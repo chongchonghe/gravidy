@@ -346,6 +346,43 @@ __global__ void k_reduce(Forces *in,
     }
 }
 
+
+__global__ void k_reduce_time_powerof2(double *t,
+                              double *dt,
+                              unsigned int n,
+                              double *ctime_result)
+{
+  extern __shared__ double sh[];
+  unsigned int tid = threadIdx.x;
+  unsigned int i = blockIdx.x*(blockDim.x*2) + threadIdx.x; // do two block loads
+
+
+  double timei;
+  double timej;
+
+  // populate shared memory with the t+dt stuff
+
+  for (unsigned int s=blockDim.x; s>32; s>>=1) {
+    if ((i < n) && (tid < s)) {
+      sh[tid] += sh[tid + s];
+    }
+    __syncthreads();
+  }
+}
+
+__device__ void k_reduce_time_warp(volatile double *sh,
+                                   int tid,
+                                   unsigned int n_remaining)
+{
+  // Single warp reduce; use 32 (warp) threads to reduce 64 elements
+  if ((tid+32 < n_remaining) && (sh[tid + 32] < sh[tid])) sh[tid] = sh[tid + 32];
+  if ((tid+16 < n_remaining) && (sh[tid + 16]) < sh[tid]) sh[tid] = sh[tid + 16];
+  if ((tid+ 8 < n_remaining) && (sh[tid +  8]) < sh[tid]) sh[tid] = sh[tid +  8];
+  if ((tid+ 4 < n_remaining) && (sh[tid +  4]) < sh[tid]) sh[tid] = sh[tid +  4];
+  if ((tid+ 2 < n_remaining) && (sh[tid +  2]) < sh[tid]) sh[tid] = sh[tid +  2];
+  if ((tid+ 1 < n_remaining) && (sh[tid +  1]) < sh[tid]) sh[tid] = sh[tid +  1];
+}
+
 __global__ void k_energy(double4 *r,
                          double4 *v,
                          double *ekin,
@@ -712,7 +749,7 @@ __global__ void k_find_particles_to_move(unsigned int *move,
     }
     running_total_previous_nact += nact_partial[i]; // starting index into move
   }
-  __syncthreads();
+
   // Move is all assembled!
   // Reduce the max mass; follow k_reduce example
   // I know that BSIZE is 32, so I write this for that size.
@@ -742,4 +779,115 @@ __global__ void k_find_particles_to_move(unsigned int *move,
     max_mass_result[0] = max_mass_arr[0]; // result of reduction
   }
   // Done!
+}
+
+
+/** Methods that look for the next integration time.
+This kernel function performs the first few steps of the min reduce on t+dt.
+The results are stored in the array time_tmp, which is used by another
+global kernel function to reduce all blocks' results into a single result.
+**/
+__global__ void k_time_min_reduce(double *t,
+                                  double *dt,
+                                  double *time_tmp) // Size of gridDim, indexed by blockIdx.x
+{
+  // 512 threads per block for this call. Operates on 1024 elements per block
+  // number of blocks will be a power of 2 between 1 and 2^9
+  unsigned int bdim = blockDim.x; // Always equal to BSIZE_LARGE
+  unsigned int bid = blockIdx.x;
+  unsigned int tid = threadIdx.x;
+  unsigned int i = bid*bdim*2 + tid; // bdim*2 recognizes that these 512 threads will do 1024 elements
+
+  volatile __shared__ double sh[BSIZE_LARGE]; // Shared memory for reducing
+
+  // Do the first reduce, from 1024 -> 512. Also includes the global t, dt reads
+  // index t, dt with [i] and sh with [tid]
+  double time1 = t[i] + dt[i];
+  double time2 = t[i+BSIZE_LARGE] + dt[i+BSIZE_LARGE];
+  if (time2 < time1) {
+    sh[tid] = time2;
+  } else {
+    sh[tid] = time1;
+  }
+  __syncthreads();
+
+  // Do the other reduces
+  for (unsigned int s = BSIZE_LARGE/2; s>32; s>>=1) {
+    if (tid < s) {
+      time1 = sh[tid];
+      time2 = sh[tid+s];
+      if (time2 < time1) {
+        sh[tid] = time2;
+      }
+    }
+    __syncthreads();
+  }
+  // There are now 64 elements left, already in shared memory. Let a single warp
+  // of 32 do the last reduce in a device function (apparently lets other warps off the hook)
+  if (tid < 32) k_single_warp_min_reduce(sh, tid);
+  __syncthreads();
+  if (tid == 0) time_tmp[bid] = sh[0];
+}
+
+/** Min-reduce a single warp's worth of data.
+Uses all 32 threads to reduce 64 elements.
+**/
+__device__ void k_single_warp_min_reduce(volatile double *sh, int tid)
+{
+  // Unrolled last warp
+  if (tid < 32) {
+    if (sh[tid+32] < sh[tid]) sh[tid] = sh[tid+32];
+  }
+  if (tid < 16) {
+    if (sh[tid+16] < sh[tid]) sh[tid] = sh[tid+16];
+  }
+  if (tid <  8) {
+    if (sh[tid+ 8] < sh[tid]) sh[tid] = sh[tid+ 8];
+  }
+  if (tid <  4) {
+    if (sh[tid+ 4] < sh[tid]) sh[tid] = sh[tid+ 4];
+  }
+  if (tid <  2) {
+    if (sh[tid+ 2] < sh[tid]) sh[tid] = sh[tid+ 2];
+  }
+  if (tid <  1) {
+    if (sh[tid+ 1] < sh[tid]) sh[tid] = sh[tid+ 1];
+  }
+}
+
+
+/** Methods that look for the next integration time.
+This kernel performs the final reduce, reducing the work of multiple blocks
+from k_time_min_reduce.
+**/
+__global__ void k_time_min_reduce_final(double *tmp_time)
+{
+  // Size of tmp_time is equal to 2x the number of threads in this block!
+  // Number of blocks is guaranteed to be 1 in this function
+  unsigned int bdim = blockDim.x;
+  unsigned int tid = threadIdx.x;
+  // Dynamically allocated shared memory to speed up the accesses for this last step
+  // Shared memory size = number of threads
+  extern __shared__ double sh[];
+  // Load in the global values and make the first reduce from 2*bdim to bdim
+  // This is the only step that uses all the threads
+  double time1 = tmp_time[tid];
+  double time2 = tmp_time[tid+bdim];
+  if (time2 < time1) {
+    sh[tid] = time2;
+  } else {
+    sh[tid] = time1;
+  }
+  __syncthreads();
+  // Loop down until reduction is finished.
+  for (unsigned int s = bdim/2; s>0; s>>=1) {
+    if (tid < s) {
+      time1 = sh[tid];
+      time2 = sh[tid+s];
+      if (time2 < time1) {
+        sh[tid] = time2;
+      }
+    }
+    __syncthreads();
+  }
 }

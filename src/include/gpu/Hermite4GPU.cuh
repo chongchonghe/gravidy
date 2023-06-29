@@ -136,6 +136,7 @@ class Hermite4GPU : public Hermite4 {
         void correction_pos_vel(double ITIME, unsigned int nact);
         void save_old_acc_jrk_gpu(unsigned int nact);
         unsigned int find_particles_to_move_gpu(double ITIME);
+        void next_integration_time_gpu(double &CTIME);
         void initial_data_transfer();
         void snapshot_data_transfer();
         void integration();
@@ -145,6 +146,8 @@ class Hermite4GPU : public Hermite4 {
         float  gpu_timer_stop(std::string f);
 
         double get_energy_gpu();
+
+        void save_log2n();
 
         // // temporarily here
         // double get_magnitude(double x, double y, double z);
@@ -299,5 +302,15 @@ __global__ void k_find_particles_to_move(unsigned int *move,
                                          unsigned int *nact_result,
                                          float *max_mass_result);
 
+
+
+/** Next 3 functions deal with the reductions for next_integration_time_gpu **/
+__global__ void k_time_min_reduce(double *t,
+                                  double *dt,
+                                  double *time_tmp)
+
+__device__ void k_single_warp_min_reduce(volatile double *sh, int tid);
+
+__global__ void k_time_min_reduce_final(double *tmp_time);
 
 #endif

@@ -107,6 +107,8 @@ Hermite4GPU::Hermite4GPU(NbodySystem *ns, Logger *logger, NbodyUtils *nu)
         logger->log_info(sss);
     }
 
+    save_log2n(); // assign ns->log2n and ns->nblocks_reduce
+
     i1_size = ns->n * sizeof(int);
     d1_size = ns->n * sizeof(double);
     d3_size = ns->n * sizeof(double3);
@@ -153,7 +155,7 @@ void Hermite4GPU::alloc_arrays_device()
 
         CSC(cudaMalloc((void**)&ns->d_nact[g], sizeof(unsigned int))); // single uint
         CSC(cudaMalloc((void**)&ns->d_max_mass[g], sizeof(float))); // single float
-        CSC(cudaMalloc((void**)&ns->d_min_time[g], sizeof(double))); // single float
+        CSC(cudaMalloc((void**)&ns->d_min_time[g], sizeof(double)*ns->nblocks_reduce));
 
         CSC(cudaMemset(ns->d_r[g], 0, d4_size));
         CSC(cudaMemset(ns->d_v[g], 0, d4_size));
@@ -175,7 +177,7 @@ void Hermite4GPU::alloc_arrays_device()
 
         CSC(cudaMemset(ns->d_nact[g], 0, sizeof(unsigned int)));
         CSC(cudaMemset(ns->d_max_mass[g], 0, sizeof(float)));
-        CSC(cudaMemset(ns->d_min_time[g], 0, sizeof(double)));
+        CSC(cudaMemset(ns->d_time_tmp[g], 0, sizeof(double)*ns->nblocks_reduce));
 
         ns->h_fout_gpu[g] = new Forces[ns->n*NJBLOCK];
     }
@@ -214,7 +216,7 @@ void Hermite4GPU::free_arrays_device()
 
         CSC(cudaFree(ns->d_nact[g]));
         CSC(cudaFree(ns->d_max_mass[g]));
-        CSC(cudaFree(ns->d_min_time[g]));
+        CSC(cudaFree(ns->d_time_tmp[g]));
 
         delete ns->h_fout_gpu[g];
     }
@@ -690,6 +692,33 @@ unsigned int Hermite4GPU::find_particles_to_move_gpu(double ITIME)
 
 }
 
+/** Find the next integration time.
+Minimum of the (current + next) times of all particles.
+This is a big reduce algorithm, so runs fastest on powers of 2.
+**/
+void Hermite4GPU::next_integration_time_gpu(double &CTIME)
+{
+  // ns->log2n stores the precalculated log2(n)
+  nthreads = BSIZE_LARGE;
+  nblocks = ns->nblocks_reduce;
+
+  CSC(cudaSetDevice(g));
+
+  k_time_min_reduce <<< nblocks, nthreads >>> (ns->d_t, ns->d_dt, ns->d_time_tmp);
+
+  if (nblocks > 1) {
+    // final reduce, since n is larger than 1024
+    // For now, assume that the number of elements remaining is a power of 2 between 2 and 512, inclusive
+    nthreads = ns->nblocks_reduce/2; // do one thread per two previous blocks (double load)
+    nblocks = 1;
+    size_t smem_reduce_time = sizeof(double) * nthreads; // shared memory to make fast reduce
+    k_time_min_reduce_final <<< nblocks, nthreads, smem_reduce_time >>> (ns->d_time_tmp);
+  }
+  // if nblocks == 1, then that was the final round of reduction.
+
+  CSC(cudaMemcpy(&CTIME, ns->d_time_tmp[g], sizeof(double), cudaMemcpyDeviceToHost));
+
+}
 
 
 /**
@@ -843,3 +872,18 @@ float Hermite4GPU::gpu_timer_stop(std::string f){
  * to perfom the force calculation, not a host method.
  */
 void Hermite4GPU::force_calculation(const Predictor &pi, const Predictor &pj, Forces &fi) {}
+
+
+/** Find log2(n) **/
+void Hermite4GPU::save_log2n()
+{
+  unsigned int n = ns->n;
+  unsigned int s = 0;
+  while (n > 1) {
+    n >>= 1;
+    s++;
+  }
+  ns->log2n = s;
+  // Also save the nblocks_reduce number, which is ns->n/1024 (assuming BSIZE_LARGE = 512)
+  ns->nblocks_reduce = 1<<(ns->log2n - LOG2_BSIZE_LARGE - 1);
+}
