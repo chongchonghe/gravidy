@@ -155,7 +155,7 @@ void Hermite4GPU::alloc_arrays_device()
 
         CSC(cudaMalloc((void**)&ns->d_nact[g], sizeof(unsigned int))); // single uint
         CSC(cudaMalloc((void**)&ns->d_max_mass[g], sizeof(float))); // single float
-        CSC(cudaMalloc((void**)&ns->d_min_time[g], sizeof(double)*ns->nblocks_reduce));
+        CSC(cudaMalloc((void**)&ns->d_time_tmp[g], sizeof(double)*ns->nblocks_reduce));
 
         CSC(cudaMemset(ns->d_r[g], 0, d4_size));
         CSC(cudaMemset(ns->d_v[g], 0, d4_size));
@@ -702,9 +702,10 @@ void Hermite4GPU::next_integration_time_gpu(double &CTIME)
   nthreads = BSIZE_LARGE;
   nblocks = ns->nblocks_reduce;
 
+  int g = 0; // Only 1 GPU
   CSC(cudaSetDevice(g));
 
-  k_time_min_reduce <<< nblocks, nthreads >>> (ns->d_t, ns->d_dt, ns->d_time_tmp);
+  k_time_min_reduce <<< nblocks, nthreads >>> (ns->d_t[g], ns->d_dt[g], ns->d_time_tmp[g]);
 
   if (nblocks > 1) {
     // final reduce, since n is larger than 1024
@@ -712,7 +713,7 @@ void Hermite4GPU::next_integration_time_gpu(double &CTIME)
     nthreads = ns->nblocks_reduce/2; // do one thread per two previous blocks (double load)
     nblocks = 1;
     size_t smem_reduce_time = sizeof(double) * nthreads; // shared memory to make fast reduce
-    k_time_min_reduce_final <<< nblocks, nthreads, smem_reduce_time >>> (ns->d_time_tmp);
+    k_time_min_reduce_final <<< nblocks, nthreads, smem_reduce_time >>> (ns->d_time_tmp[g]);
   }
   // if nblocks == 1, then that was the final round of reduction.
 
