@@ -307,7 +307,7 @@ __global__ void k_find_particles_to_move(unsigned int *move,
 /** Next 3 functions deal with the reductions for next_integration_time_gpu **/
 __global__ void k_time_min_reduce(double *t,
                                   double *dt,
-                                  double *time_tmp)
+                                  double *time_tmp);
 
 __device__ void k_single_warp_min_reduce(volatile double *sh, int tid);
 
