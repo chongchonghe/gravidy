@@ -832,26 +832,27 @@ __global__ void k_time_min_reduce_final(double *tmp_time)
   unsigned int tid = threadIdx.x;
   // Dynamically allocated shared memory to speed up the accesses for this last step
   // Shared memory size = number of threads
-  extern __shared__ double sh[];
+  extern __shared__ double times_shared[];
   // Load in the global values and make the first reduce from 2*bdim to bdim
   // This is the only step that uses all the threads
   double time1 = tmp_time[tid];
   double time2 = tmp_time[tid+bdim];
   if (time2 < time1) {
-    sh[tid] = time2;
+    times_shared[tid] = time2;
   } else {
-    sh[tid] = time1;
+    times_shared[tid] = time1;
   }
   __syncthreads();
   // Loop down until reduction is finished.
   for (unsigned int s = bdim/2; s>0; s>>=1) {
     if (tid < s) {
-      time1 = sh[tid];
-      time2 = sh[tid+s];
+      time1 = times_shared[tid];
+      time2 = times_shared[tid+s];
       if (time2 < time1) {
-        sh[tid] = time2;
+        times_shared[tid] = time2;
       }
     }
     __syncthreads();
   }
+  if (tid == 0) tmp_time[0] = times_shared[0];
 }
