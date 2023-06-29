@@ -347,42 +347,6 @@ __global__ void k_reduce(Forces *in,
 }
 
 
-__global__ void k_reduce_time_powerof2(double *t,
-                              double *dt,
-                              unsigned int n,
-                              double *ctime_result)
-{
-  extern __shared__ double sh[];
-  unsigned int tid = threadIdx.x;
-  unsigned int i = blockIdx.x*(blockDim.x*2) + threadIdx.x; // do two block loads
-
-
-  double timei;
-  double timej;
-
-  // populate shared memory with the t+dt stuff
-
-  for (unsigned int s=blockDim.x; s>32; s>>=1) {
-    if ((i < n) && (tid < s)) {
-      sh[tid] += sh[tid + s];
-    }
-    __syncthreads();
-  }
-}
-
-__device__ void k_reduce_time_warp(volatile double *sh,
-                                   int tid,
-                                   unsigned int n_remaining)
-{
-  // Single warp reduce; use 32 (warp) threads to reduce 64 elements
-  if ((tid+32 < n_remaining) && (sh[tid + 32] < sh[tid])) sh[tid] = sh[tid + 32];
-  if ((tid+16 < n_remaining) && (sh[tid + 16]) < sh[tid]) sh[tid] = sh[tid + 16];
-  if ((tid+ 8 < n_remaining) && (sh[tid +  8]) < sh[tid]) sh[tid] = sh[tid +  8];
-  if ((tid+ 4 < n_remaining) && (sh[tid +  4]) < sh[tid]) sh[tid] = sh[tid +  4];
-  if ((tid+ 2 < n_remaining) && (sh[tid +  2]) < sh[tid]) sh[tid] = sh[tid +  2];
-  if ((tid+ 1 < n_remaining) && (sh[tid +  1]) < sh[tid]) sh[tid] = sh[tid +  1];
-}
-
 __global__ void k_energy(double4 *r,
                          double4 *v,
                          double *ekin,
